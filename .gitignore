@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Model files (too large, download separately)
+models/
+*.safetensors
+*.bin
+*.pt
+*.gguf
+
+# Logs
+*.log
+
+# Runtime data
+chromadb-data/
+chroma-data/
+
+# ZIP source files
+*.zip
+
+# macOS
+__MACOSX/
+.DS_Store
+
+# Claude Code
+.claude/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# 原始工具包（已整合到 web/ 目录）
+ollama-resume-toolkit/

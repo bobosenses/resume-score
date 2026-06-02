@@ -1,0 +1,123 @@
+============================================================
+  服务器互动记录 - 2026-05-21
+============================================================
+
+一、今日完成事项
+================
+
+1. 并发压力测试
+   - 对 Qwen3-8B-FP8 做 c=1,2,4,8,16,32,64 并发基准测试
+   - 结果：c=1 延迟 3.43s / 吞吐 0.29 req/s
+           c=64 延迟 3.05s / 吞吐 1.16 req/s
+   - 线性扩展良好
+
+2. eval_test.html 页面布局调整
+   - 单次评估结果移至"开始评估"按钮下一行
+   - 不再显示在并发结果面板之后
+
+3. Nemotron-Nano-9B-v2 部署尝试（失败）
+   - FP8 格式：需 GPU 算力 >=89 (Hopper)，A10 只有 86 (Ampere)，不兼容
+   - GGUF Q4_K_M 格式：vLLM 0.21.0 不支持 nemotron_h 架构
+   - 6.1GB GGUF 文件仍留在 /root/models/nemotron-nano-9b-v2-gguf/ (暂不可用)
+
+4. Chroma + Reranker 职能匹配系统搭建
+   - Chroma 向量数据库部署，导入 knowledge_base.csv (2233 条职能记录)
+   - BGE Reranker v2-m3 重排模型部署
+   - text2vec-base-multilingual 嵌入模型部署
+
+5. 架构统一（最重要变更）
+   - 停掉旧 Python 静态文件服务 (8080) 和旧 Flask API (8081)
+   - 构建统一网关 (端口 8080)，所有请求走一个端口
+   - vLLM 移到 9000 端口作为后端
+   - 解决 reranker GPU OOM：vLLM GPU 利用率从 85% 降到 70%
+   - 关闭 Ollama 服务释放显存
+
+二、当前服务器进程
+==================
+
+  服务                    端口    说明
+  ----------------------  ------  --------------------------------
+  vLLM (Qwen3-8B-FP8)     9000    后端 LLM，GPU 70% 利用率
+  统一网关 (Flask)        8080    静态文件 + vLLM 代理 + 职能匹配 API
+  Ollama                  -       已关闭
+
+三、端口路由
+============
+
+  路径            功能
+  --------------  ------------------------------------------
+  /               eval_test.html 静态页面
+  /v1/*           代理转发到 vLLM (9000)，流式透传
+  /api/search     Chroma 向量检索 + BGE Reranker 重排
+  /api/health     健康检查
+  /api/collections 列出 Chroma 集合
+
+四、模型文件
+============
+
+  路径                                        大小      状态
+  ------------------------------------------  --------  ------------
+  /root/models/qwen3-8b-fp8/                  8.9 GB    运行中
+  /root/models/bge-reranker-v2-m3/            4.3 GB    GPU 推理中 (~2.1 GB)
+  /root/models/text2vec-base-multilingual/    2.0 GB    CPU 嵌入模型 (pytorch_model.bin 449MB)
+  /root/models/nemotron-nano-9b-v2-gguf/      6.1 GB    暂不可用
+  /root/models/qwen2.5-7b-safetensors/        4.4 GB    旧模型（未使用）
+
+五、Chroma 数据库
+=================
+
+  路径：/root/vLLM/chroma_db/
+  集合名：job_functions
+  记录数：2233 条职能记录
+  来源：knowledge_base.csv (2239 行，2233 条有效)
+
+六、访问地址
+============
+
+  http://112.74.46.132:8080/
+
+  页面功能：
+  - 简历评估 Tab：填写简历/JD/规则 -> LLM 评估打分（支持思考/非思考模式）
+  - 职能匹配 Tab：输入描述 -> 向量检索 + Rerank 重排
+
+七、关键性能指标
+================
+
+  指标                      值
+  ------------------------  -------
+  向量检索耗时              0.02s
+  Rerank 首次 (GPU)         0.4s
+  Rerank 后续 (GPU)         0.15s
+  GPU 显存分配              vLLM ~70% (~15.5 GB)
+                            Reranker ~2.1 GB
+
+八、API 接口
+============
+
+1. POST /api/search
+   请求体：{"query": "...", "top_k": 10, "rerank": true/false}
+   返回：
+   {
+     "query": "...",
+     "total_found": N,
+     "vector_time_s": 0.02,
+     "rerank_time_s": 0.15,
+     "vector_results": [...],
+     "rerank_results": [...]
+   }
+
+2. GET /api/health
+   返回：{"status": "ok"}
+
+3. GET /api/collections
+   返回：[{"name": "job_functions", "count": 2233}]
+
+4. POST /v1/chat/completions (代理到 vLLM)
+   标准 OpenAI API 格式，支持流式和非流式
+
+九、待处理事项
+==============
+
+- Ollama 已关闭 (如需可重新启动)
+- Nemotron GGUF 文件可清理 (或等 llama.cpp 支持后使用)
+- 非思考模式默认建议关闭 (简历评估场景更合适)
