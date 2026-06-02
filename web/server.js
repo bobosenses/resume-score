@@ -5,11 +5,13 @@ const path = require('path');
 const MODEL = process.env.VLLM_MODEL || 'Qwen/Qwen3-8B-FP8';
 const VLLM_BASE = process.env.VLLM_BASE || 'http://127.0.0.1:8000';
 const PORT = process.env.PORT || 3000;
-const HTML = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-const BENCHMARK_HTML = fs.readFileSync(path.join(__dirname, 'benchmark.html'), 'utf8');
+const INDEX_PATH = path.join(__dirname, 'index.html');
+const BENCHMARK_PATH = path.join(__dirname, 'benchmark.html');
+const LOGS_PATH = path.join(__dirname, 'logs.html');
 const TEST_CASES_PATH = path.join(__dirname, '..', 'test', 'resume_test_cases.json');
 const DEFAULT_TEST_CASE_PATH = path.join(__dirname, '123.txt');
 const SCORING_RULES_PATH = path.join(__dirname, '..', 'config', 'scoring_rules.json');
+const PROXY_BASE = process.env.PROXY_BASE || 'http://127.0.0.1:8000';
 
 // ========== Helper: call vLLM chat/completions and stream back Ollama-style generate chunks ==========
 function streamChatCompletion(messages, options, res) {
@@ -205,13 +207,36 @@ function chatWithVLLM(messages, options, res) {
 
 const server = http.createServer((req, res) => {
     if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(HTML);
+        try {
+            const html = fs.readFileSync(INDEX_PATH, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            return res.end(html);
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            return res.end('Error reading index.html');
+        }
     }
 
     if (req.method === 'GET' && (req.url === '/benchmark' || req.url === '/benchmark.html')) {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        return res.end(BENCHMARK_HTML);
+        try {
+            const html = fs.readFileSync(BENCHMARK_PATH, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            return res.end(html);
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            return res.end('Error reading benchmark.html');
+        }
+    }
+
+    if (req.method === 'GET' && (req.url === '/logs' || req.url === '/logs.html')) {
+        try {
+            const html = fs.readFileSync(LOGS_PATH, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            return res.end(html);
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            return res.end('Error reading logs.html');
+        }
     }
 
     if (req.method === 'GET' && req.url === '/api/benchmark') {
@@ -238,6 +263,22 @@ const server = http.createServer((req, res) => {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({ error: '测试用例文件未找到' }));
         }
+    }
+
+    // ========== 日志查询代理 ==========
+    if (req.method === 'GET' && req.url.startsWith('/api/logs')) {
+        const targetUrl = PROXY_BASE + req.url;
+        http.get(targetUrl, (proxyRes) => {
+            res.writeHead(proxyRes.statusCode, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-cache'
+            });
+            proxyRes.pipe(res);
+        }).on('error', (e) => {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        });
+        return;
     }
 
     // ========== 打分规则管理 ==========

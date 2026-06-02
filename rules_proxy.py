@@ -5,18 +5,24 @@ Rules Injection Proxy for vLLM
 - 对 /v1/chat/completions 请求，当 use_scoring_rules=true 时自动注入打分规则
 - 打分规则从 /root/vLLM/config/scoring_rules.json 实时读取（热加载）
 - 提供规则管理 API：GET/PUT /api/scoring-rules
+- 提供请求日志查询 API：GET /api/logs, GET /api/logs/stats
 """
 
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import httpx
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+
+# 导入日志数据库模块
+from log_db import insert_log, query_logs, get_log_detail, get_stats
 
 # ========== 配置 ==========
 BASE_DIR = Path(__file__).parent
@@ -142,6 +148,46 @@ def reload_scoring_rules():
     }
 
 
+# ========== 日志查询 API ==========
+@app.get("/api/logs")
+def get_logs(
+    start_time: Optional[str] = Query(None, description="开始时间 (YYYY-MM-DD HH:MM:SS)"),
+    end_time: Optional[str] = Query(None, description="结束时间 (YYYY-MM-DD HH:MM:SS)"),
+    client_ip: Optional[str] = Query(None, description="客户端 IP"),
+    status_code: Optional[int] = Query(None, description="HTTP 状态码"),
+    use_scoring_rules: Optional[bool] = Query(None, description="是否使用打分规则"),
+    keyword: Optional[str] = Query(None, description="关键字搜索"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量")
+):
+    """查询请求日志"""
+    return query_logs(
+        start_time=start_time,
+        end_time=end_time,
+        client_ip=client_ip,
+        status_code=status_code,
+        use_scoring_rules=use_scoring_rules,
+        keyword=keyword,
+        page=page,
+        page_size=page_size
+    )
+
+
+@app.get("/api/logs/{log_id}")
+def get_log_by_id(log_id: int):
+    """获取单条日志详情"""
+    log = get_log_detail(log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="日志不存在")
+    return log
+
+
+@app.get("/api/logs/stats/summary")
+def get_log_stats(hours: int = Query(24, ge=1, le=168, description="统计时间范围（小时）")):
+    """获取日志统计信息"""
+    return get_stats(hours=hours)
+
+
 # ========== vLLM 代理 ==========
 async def proxy_to_vllm(method: str, path: str, request: Request) -> httpx.Response:
     """将请求转发到 vLLM"""
@@ -219,10 +265,32 @@ async def health():
 async def vllm_proxy(request: Request, path: str):
     """透传 vLLM 所有接口，对 chat/completions 做规则注入"""
     full_path = f"/v1/{path}"
+    start_time = time.time()
+    client_ip = request.client.host if request.client else "unknown"
 
     # 非 chat/completions 请求直接透传
     if path != "chat/completions" or request.method != "POST":
         resp = await proxy_to_vllm(request.method, full_path, request)
+        duration_ms = (time.time() - start_time) * 1000
+
+        # 记录日志
+        try:
+            request_body = (await request.body()).decode("utf-8", errors="ignore")
+        except:
+            request_body = None
+
+        insert_log(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            client_ip=client_ip,
+            method=request.method,
+            path=full_path,
+            request_body=request_body[:10000] if request_body else None,  # 限制长度
+            response_body=None,
+            status_code=resp.status_code,
+            duration_ms=round(duration_ms, 2),
+            use_scoring_rules=False
+        )
+
         return JSONResponse(
             content=resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
             status_code=resp.status_code,
@@ -234,14 +302,33 @@ async def vllm_proxy(request: Request, path: str):
     except Exception:
         raise HTTPException(status_code=400, detail="无效的 JSON")
 
+    # 提取关键信息用于日志（不记录规则内容）
     use_rules = body.pop("use_scoring_rules", False)
+    model = body.get("model", "")
+    messages = body.get("messages", [])
+
+    # 构建简化的请求日志（只保留用户内容，不记录规则）
+    log_request = {
+        "model": model,
+        "max_tokens": body.get("max_tokens"),
+        "temperature": body.get("temperature"),
+        "stream": body.get("stream", False),
+        "use_scoring_rules": use_rules,
+        "messages": []
+    }
+
+    # 只记录非 system 消息（避免记录规则）
+    for msg in messages:
+        if msg.get("role") != "system":
+            log_request["messages"].append(msg)
+
+    request_body_str = json.dumps(log_request, ensure_ascii=False)
 
     if use_rules:
         rules_config = load_scoring_rules()
         if "error" in rules_config:
             raise HTTPException(status_code=500, detail=f"规则加载失败: {rules_config['error']}")
 
-        messages = body.get("messages", [])
         body["messages"] = inject_rules_into_messages(messages, rules_config)
 
     # 判断是否流式
@@ -251,6 +338,20 @@ async def vllm_proxy(request: Request, path: str):
     headers = dict(request.headers)
 
     if is_stream:
+        # 流式响应暂不记录响应内容
+        duration_ms = (time.time() - start_time) * 1000
+        insert_log(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            client_ip=client_ip,
+            method="POST",
+            path=full_path,
+            request_body=request_body_str[:10000],
+            response_body="[Stream Response]",
+            status_code=200,
+            duration_ms=round(duration_ms, 2),
+            use_scoring_rules=use_rules,
+            model=model
+        )
         return await proxy_stream_to_vllm("POST", full_path, body_bytes, headers)
     else:
         async with httpx.AsyncClient(timeout=600.0) as client:
@@ -266,6 +367,37 @@ async def vllm_proxy(request: Request, path: str):
                 content=body_bytes,
                 headers=forward_headers,
             )
+
+        duration_ms = (time.time() - start_time) * 1000
+
+        # 解析响应
+        try:
+            resp_json = resp.json()
+            resp_body_str = json.dumps(resp_json, ensure_ascii=False)
+            # 提取 token 使用信息
+            usage = resp_json.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
+        except:
+            resp_body_str = resp.text
+            prompt_tokens = None
+            completion_tokens = None
+
+        # 记录日志
+        insert_log(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            client_ip=client_ip,
+            method="POST",
+            path=full_path,
+            request_body=request_body_str[:10000],
+            response_body=resp_body_str[:10000],
+            status_code=resp.status_code,
+            duration_ms=round(duration_ms, 2),
+            use_scoring_rules=use_rules,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens
+        )
 
         try:
             return JSONResponse(content=resp.json(), status_code=resp.status_code)

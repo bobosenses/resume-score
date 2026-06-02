@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>请求日志 - vLLM Proxy</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        h1 { margin-bottom: 20px; color: #1a1a1a; }
+
+        /* 统计卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-card .label { font-size: 12px; color: #666; margin-bottom: 5px; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #1890ff; }
+        .stat-card .sub { font-size: 12px; color: #999; margin-top: 5px; }
+
+        /* 筛选区域 */
+        .filters { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 5px; }
+        .filter-group label { font-size: 13px; color: #666; white-space: nowrap; }
+        .filter-group input, .filter-group select { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
+        .filter-group input[type="datetime-local"] { width: 180px; }
+        .btn { padding: 6px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: #1890ff; color: white; }
+        .btn-primary:hover { background: #40a9ff; }
+        .btn-default { background: #f5f5f5; border: 1px solid #d9d9d9; }
+
+        /* 表格 */
+        .table-wrapper { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #fafafa; padding: 12px 15px; text-align: left; font-size: 13px; color: #666; border-bottom: 1px solid #f0f0f0; }
+        td { padding: 10px 15px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+        tr:hover { background: #f5f5f5; }
+        .status-200 { color: #52c41a; }
+        .status-4xx { color: #faad14; }
+        .status-5xx { color: #ff4d4f; }
+        .rules-yes { color: #52c41a; font-weight: bold; }
+        .rules-no { color: #999; }
+        .clickable { cursor: pointer; color: #1890ff; }
+        .clickable:hover { text-decoration: underline; }
+
+        /* 分页 */
+        .pagination { display: flex; justify-content: space-between; align-items: center; padding: 15px; }
+        .pagination .info { font-size: 13px; color: #666; }
+        .pagination .pages { display: flex; gap: 5px; }
+        .pagination .page-btn { padding: 5px 10px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer; font-size: 13px; background: white; }
+        .pagination .page-btn:hover { border-color: #1890ff; color: #1890ff; }
+        .pagination .page-btn.active { background: #1890ff; color: white; border-color: #1890ff; }
+        .pagination .page-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+        /* 详情弹窗 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .modal-content { background: white; margin: 30px auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 1000px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+        .modal-header h2 { font-size: 16px; }
+        .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; }
+        .modal-close:hover { color: #333; }
+        .detail-section { margin-bottom: 15px; }
+        .detail-section h3 { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .detail-content { background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+        .detail-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        .detail-item { display: flex; gap: 8px; }
+        .detail-item .label { color: #666; white-space: nowrap; }
+        .detail-item .value { font-weight: 500; }
+
+        /* 加载状态 */
+        .loading { text-align: center; padding: 40px; color: #999; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 请求日志</h1>
+
+        <!-- 统计卡片 -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="label">总请求数 (24h)</div>
+                <div class="value" id="statTotal">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">成功率</div>
+                <div class="value" id="statSuccessRate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">平均耗时</div>
+                <div class="value" id="statAvgDuration">-</div>
+                <div class="sub">毫秒</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">使用打分规则</div>
+                <div class="value" id="statWithRules">-</div>
+            </div>
+        </div>
+
+        <!-- 筛选区域 -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>开始时间:</label>
+                <input type="datetime-local" id="startTime">
+            </div>
+            <div class="filter-group">
+                <label>结束时间:</label>
+                <input type="datetime-local" id="endTime">
+            </div>
+            <div class="filter-group">
+                <label>IP:</label>
+                <input type="text" id="clientIp" placeholder="输入IP" style="width: 120px;">
+            </div>
+            <div class="filter-group">
+                <label>状态码:</label>
+                <select id="statusCode">
+                    <option value="">全部</option>
+                    <option value="200">200</option>
+                    <option value="400">400</option>
+                    <option value="404">404</option>
+                    <option value="500">500</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>关键字:</label>
+                <input type="text" id="keyword" placeholder="搜索内容" style="width: 150px;">
+            </div>
+            <button class="btn btn-primary" onclick="loadLogs()">查询</button>
+            <button class="btn btn-default" onclick="resetFilters()">重置</button>
+        </div>
+
+        <!-- 日志表格 -->
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>IP</th>
+                        <th>方法</th>
+                        <th>路径</th>
+                        <th>状态码</th>
+                        <th>耗时(ms)</th>
+                        <th>打分规则</th>
+                        <th>模型</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTableBody">
+                    <tr><td colspan="9" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <div class="info" id="paginationInfo">共 0 条记录</div>
+                <div class="pages" id="paginationPages"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>请求详情 #<span id="detailId"></span></h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="detail-info" id="detailInfo"></div>
+            <div class="detail-section">
+                <h3>请求内容</h3>
+                <div class="detail-content" id="detailRequest">-</div>
+            </div>
+            <div class="detail-section">
+                <h3>响应内容</h3>
+                <div class="detail-content" id="detailResponse">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/logs';
+        let currentPage = 1;
+        let pageSize = 20;
+
+        // 加载统计信息
+        async function loadStats() {
+            try {
+                const resp = await fetch(`${API_BASE}/stats/summary?hours=24`);
+                const data = await resp.json();
+                document.getElementById('statTotal').textContent = data.total_requests || 0;
+                document.getElementById('statSuccessRate').textContent = (data.success_rate || 0) + '%';
+                document.getElementById('statAvgDuration').textContent = Math.round(data.avg_duration_ms || 0);
+                document.getElementById('statWithRules').textContent = data.with_scoring_rules || 0;
+            } catch (e) {
+                console.error('加载统计失败:', e);
+            }
+        }
+
+        // 加载日志列表
+        async function loadLogs(page = 1) {
+            currentPage = page;
+            const params = new URLSearchParams();
+            params.append('page', page);
+            params.append('page_size', pageSize);
+
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const clientIp = document.getElementById('clientIp').value;
+            const statusCode = document.getElementById('statusCode').value;
+            const keyword = document.getElementById('keyword').value;
+
+            if (startTime) params.append('start_time', startTime.replace('T', ' ') + ':00');
+            if (endTime) params.append('end_time', endTime.replace('T', ' ') + ':00');
+            if (clientIp) params.append('client_ip', clientIp);
+            if (statusCode) params.append('status_code', statusCode);
+            if (keyword) params.append('keyword', keyword);
+
+            try {
+                const resp = await fetch(`${API_BASE}?${params}`);
+                const data = await resp.json();
+                renderTable(data.data || []);
+                renderPagination(data);
+            } catch (e) {
+                console.error('加载日志失败:', e);
+                document.getElementById('logsTableBody').innerHTML =
+                    '<tr><td colspan="9" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        // 渲染表格
+        function renderTable(logs) {
+            const tbody = document.getElementById('logsTableBody');
+            if (!logs.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => `
+                <tr>
+                    <td>${log.timestamp || '-'}</td>
+                    <td>${log.client_ip || '-'}</td>
+                    <td>${log.method || '-'}</td>
+                    <td>${log.path || '-'}</td>
+                    <td class="status-${String(log.status_code).charAt(0)}xx">${log.status_code || '-'}</td>
+                    <td>${log.duration_ms ? Math.round(log.duration_ms) : '-'}</td>
+                    <td class="${log.use_scoring_rules ? 'rules-yes' : 'rules-no'}">${log.use_scoring_rules ? '✓' : '✗'}</td>
+                    <td>${log.model || '-'}</td>
+                    <td><span class="clickable" onclick="showDetail(${log.id})">详情</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // 渲染分页
+        function renderPagination(data) {
+            document.getElementById('paginationInfo').textContent =
+                `共 ${data.total} 条记录，第 ${data.page}/${data.total_pages} 页`;
+
+            const pagesDiv = document.getElementById('paginationPages');
+            let html = '';
+
+            html += `<button class="page-btn" onclick="loadLogs(${data.page - 1})" ${data.page <= 1 ? 'disabled' : ''}>上一页</button>`;
+
+            const start = Math.max(1, data.page - 2);
+            const end = Math.min(data.total_pages, data.page + 2);
+            for (let i = start; i <= end; i++) {
+                html += `<button class="page-btn ${i === data.page ? 'active' : ''}" onclick="loadLogs(${i})">${i}</button>`;
+            }
+
+            html += `<button class="page-btn" onclick="loadLogs(${data.page + 1})" ${data.page >= data.total_pages ? 'disabled' : ''}>下一页</button>`;
+
+            pagesDiv.innerHTML = html;
+        }
+
+        // 显示详情
+        async function showDetail(id) {
+            try {
+                const resp = await fetch(`${API_BASE}/${id}`);
+                const log = await resp.json();
+
+                document.getElementById('detailId').textContent = log.id;
+                document.getElementById('detailInfo').innerHTML = `
+                    <div class="detail-item"><span class="label">时间:</span><span class="value">${log.timestamp}</span></div>
+                    <div class="detail-item"><span class="label">IP:</span><span class="value">${log.client_ip}</span></div>
+                    <div class="detail-item"><span class="label">方法:</span><span class="value">${log.method}</span></div>
+                    <div class="detail-item"><span class="label">路径:</span><span class="value">${log.path}</span></div>
+                    <div class="detail-item"><span class="label">状态码:</span><span class="value">${log.status_code}</span></div>
+                    <div class="detail-item"><span class="label">耗时:</span><span class="value">${log.duration_ms}ms</span></div>
+                    <div class="detail-item"><span class="label">打分规则:</span><span class="value">${log.use_scoring_rules ? '是' : '否'}</span></div>
+                    <div class="detail-item"><span class="label">模型:</span><span class="value">${log.model || '-'}</span></div>
+                    <div class="detail-item"><span class="label">输入Token:</span><span class="value">${log.prompt_tokens || '-'}</span></div>
+                    <div class="detail-item"><span class="label">输出Token:</span><span class="value">${log.completion_tokens || '-'}</span></div>
+                `;
+
+                document.getElementById('detailRequest').textContent = formatJson(log.request_body);
+                document.getElementById('detailResponse').textContent = formatJson(log.response_body);
+
+                document.getElementById('detailModal').style.display = 'block';
+            } catch (e) {
+                alert('加载详情失败: ' + e.message);
+            }
+        }
+
+        // 格式化 JSON
+        function formatJson(str) {
+            if (!str) return '-';
+            try {
+                return JSON.stringify(JSON.parse(str), null, 2);
+            } catch {
+                return str;
+            }
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        // 重置筛选
+        function resetFilters() {
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            document.getElementById('clientIp').value = '';
+            document.getElementById('statusCode').value = '';
+            document.getElementById('keyword').value = '';
+            loadLogs(1);
+        }
+
+        // 初始化
+        loadStats();
+        loadLogs(1);
+
+        // 每 30 秒刷新
+        setInterval(() => { loadStats(); loadLogs(currentPage); }, 30000);
+
+        // 点击弹窗外部关闭
+        document.getElementById('detailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+    </script>
+</body>
+</html>
