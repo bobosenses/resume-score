@@ -21,6 +21,8 @@ models/
 
 # Logs
 *.log
+logs/
+*.db
 
 # Runtime data
 chromadb-data/

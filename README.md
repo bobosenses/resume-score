@@ -31,6 +31,7 @@
 
 ```
 ├── rules_proxy.py          # Rules Injection Proxy（端口 8000）
+├── log_db.py                # 请求日志数据库模块（SQLite）
 ├── chromadb_api.py          # RAG 语义检索 API（端口 8002）
 ├── chromadb_service.py      # ChromaDB 使用示例
 ├── config/
@@ -38,8 +39,11 @@
 ├── web/
 │   ├── server.js            # Web 服务端（端口 3000）
 │   ├── index.html           # 前端页面
+│   ├── logs.html            # 请求日志查看页面
 │   ├── benchmark.html       # 压测报告仪表盘
 │   └── 123.txt              # 默认测试用例
+├── logs/
+│   └── request_logs.db      # 请求日志数据库（自动生成，不上传）
 ├── knowledge_base/
 │   └── knowledge_base.csv   # 知识库样本数据
 ├── test_cases.json          # 测试用例（3份简历+JD+规则）
@@ -252,6 +256,64 @@ python3 test_scoring.py --compare
 tail -f vllm.log        # vLLM 日志
 tail -f proxy.log       # Rules Proxy 日志
 tail -f web.log         # Web 服务日志
+```
+
+## 请求日志系统
+
+系统自动记录每次 API 请求的详细信息，支持 Web 界面查看和筛选。
+
+### 功能特性
+
+- 📊 **统计面板** — 总请求数、成功率、平均耗时、打分规则使用数
+- 🔍 **多维筛选** — 时间范围、IP 地址、HTTP 状态码、关键字搜索
+- 📋 **详情查看** — 点击查看完整的请求/响应内容
+- 🔄 **自动刷新** — 每 30 秒自动刷新数据
+- 💾 **SQLite 存储** — 轻量级数据库，无需额外服务
+
+### 记录字段
+
+| 字段 | 说明 |
+|------|------|
+| timestamp | 请求时间 |
+| client_ip | 客户端 IP |
+| method | HTTP 方法 |
+| path | 请求路径 |
+| request_body | 请求内容（自动过滤规则，只记录用户消息） |
+| response_body | 响应内容 |
+| status_code | HTTP 状态码 |
+| duration_ms | 请求耗时（毫秒） |
+| use_scoring_rules | 是否使用打分规则 |
+| model | 模型名称 |
+| prompt_tokens | 输入 Token 数 |
+| completion_tokens | 输出 Token 数 |
+
+### 访问方式
+
+- **Web 页面**: http://localhost:3000/logs
+- **日志 API**: `GET /api/logs?page=1&page_size=20`
+- **统计 API**: `GET /api/logs/stats/summary?hours=24`
+- **详情 API**: `GET /api/logs/{id}`
+
+### API 参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| start_time | string | 开始时间 (YYYY-MM-DD HH:MM:SS) |
+| end_time | string | 结束时间 (YYYY-MM-DD HH:MM:SS) |
+| client_ip | string | 按 IP 筛选 |
+| status_code | int | 按状态码筛选 |
+| use_scoring_rules | bool | 按是否使用规则筛选 |
+| keyword | string | 关键字搜索（请求/响应内容） |
+| page | int | 页码（默认 1） |
+| page_size | int | 每页数量（默认 20，最大 100） |
+
+### 数据存储
+
+日志存储在 `logs/request_logs.db`（SQLite），该目录已添加到 `.gitignore`，不会上传到 GitHub。
+
+如需备份日志：
+```bash
+cp logs/request_logs.db logs/backup_$(date +%Y%m%d).db
 ```
 
 ## License
