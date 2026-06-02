@@ -243,12 +243,34 @@
             #scoringPanel { flex-direction: column; }
             .result-container { min-height: 300px; }
             .main-content { padding: 12px; gap: 12px; }
+            .settings-body { flex-direction: column; }
+            .settings-col-left { flex: none; width: 100%; }
         }
 
         /* Settings Panel */
+        #settingsPanel {
+            flex: 1; width: 100%; min-width: 0;
+        }
+        .settings-wrapper {
+            width: 100%; height: 100%; padding: 20px 0; display: flex; flex-direction: column;
+        }
+        .settings-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 24px; flex-shrink: 0;
+        }
+        .settings-header h2 { font-size: 18px; color: var(--text); }
+        .settings-body {
+            display: flex; gap: 28px; flex: 1; min-height: 0;
+        }
+        .settings-col-left {
+            flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column; gap: 14px;
+        }
+        .settings-col-right {
+            flex: 1; min-width: 0; display: flex; flex-direction: column;
+        }
         .setting-card {
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
-            padding: 16px 20px; margin-bottom: 14px;
+            padding: 16px 20px; margin-bottom: 0;
         }
         .setting-row {
             display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -301,6 +323,10 @@
             transition: all 0.2s; font-family: inherit;
         }
         .btn-reset:hover { background: #4a5568; }
+        .settings-section-title {
+            font-size: 14px; color: var(--text-secondary); font-weight: 600; flex-shrink: 0;
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 <body>
@@ -315,15 +341,15 @@
 
     <!-- Tabs -->
     <div class="tab-nav">
-        <button class="tab-btn active" onclick="switchTab('score')">简历打分</button>
+        <button class="tab-btn" onclick="switchTab('score')">简历打分</button>
         <button class="tab-btn" onclick="switchTab('chat')">AI Chat</button>
-        <button class="tab-btn" onclick="switchTab('settings')">⚙️ 系统设置</button>
+        <button class="tab-btn active" onclick="switchTab('settings')">⚙️ 系统设置</button>
     </div>
 
     <!-- Main -->
     <div class="main-content">
         <!-- Resume Scoring Panel -->
-        <div id="scoringPanel">
+        <div id="scoringPanel" style="display:none">
             <!-- Left: 3 Input Blocks -->
             <div class="input-section">
                 <div class="input-block">
@@ -393,11 +419,11 @@
         </div>
 
         <!-- Settings Panel -->
-        <div id="settingsPanel" style="display:none;flex:1;overflow-y:auto">
-            <div style="height:100%;padding:20px 0;display:flex;flex-direction:column">
+        <div id="settingsPanel" style="display:flex;flex:1;overflow-y:auto">
+            <div class="settings-wrapper">
                 <!-- 顶部标题栏 -->
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-shrink:0">
-                    <h2 style="font-size:18px;color:var(--text)">⚙️ 系统设置</h2>
+                <div class="settings-header">
+                    <h2>⚙️ 系统设置</h2>
                     <div style="display:flex;gap:8px">
                         <button class="btn-edit" id="settingsEditBtn" onclick="enableSettingsEdit()">✏️ 编辑</button>
                         <button class="btn-save" id="settingsSaveBtn" onclick="saveAllSettings()" style="display:none">💾 保存</button>
@@ -405,11 +431,11 @@
                 </div>
 
                 <!-- 左右两栏 -->
-                <div style="display:flex;gap:20px;flex:1;min-height:0">
+                <div class="settings-body">
 
                     <!-- 左栏：模型参数 -->
-                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
-                        <h3 style="font-size:14px;color:var(--text-secondary);font-weight:600;flex-shrink:0">模型参数</h3>
+                    <div class="settings-col-left">
+                        <h3 class="settings-section-title">模型参数</h3>
 
                         <!-- 思考模式 -->
                         <div class="setting-card">
@@ -476,9 +502,9 @@
                     </div>
 
                     <!-- 右栏：打分规则 -->
-                    <div style="flex:1.6;min-width:0;display:flex;flex-direction:column">
+                    <div class="settings-col-right">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
-                            <h3 style="font-size:14px;color:var(--text-secondary);font-weight:600">打分规则</h3>
+                            <h3 class="settings-section-title" style="margin-bottom:0">打分规则</h3>
                             <div style="display:flex;align-items:center;gap:10px">
                                 <span id="settingRulesStatus" style="font-size:12px;color:var(--text-secondary)">加载中...</span>
                                 <button class="btn-small" onclick="loadRulesFromServer()">🔄 重新加载</button>
@@ -498,7 +524,7 @@
     </div>
 
     <!-- Config Bar -->
-    <div class="config-bar">
+    <div class="config-bar" style="display:none">
         <label>模型</label>
         <input type="text" id="modelName" value="/root/vLLM/models/Qwen3-8B-FP8" style="width:320px">
         <label>Temperature</label>
