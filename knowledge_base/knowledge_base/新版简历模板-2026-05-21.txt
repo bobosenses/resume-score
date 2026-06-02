@@ -1,0 +1,275 @@
+============================================================
+  新服务器部署指南 - 2026-05-21
+  vLLM + Chroma + BGE Reranker 职能匹配系统
+============================================================
+
+环境要求：
+  - NVIDIA A10 GPU (24GB) 或同等显卡
+  - Python 3.12
+  - NVIDIA Driver 580+
+  - CUDA 12.x
+  - GPU 算力 >= 8.6 (Ampere 起)
+
+总磁盘需求：~35 GB（模型 20GB + 代码/数据库 ~15GB）
+
+
+============================================================
+  第一步：安装 Python 和虚拟环境
+============================================================
+
+  sudo apt update
+  sudo apt install -y python3.12 python3.12-venv python3-pip
+
+  # 创建虚拟环境
+  python3 -m venv /root/venv-vllm
+  source /root/venv-vllm/bin/activate
+  pip install --upgrade pip
+
+
+============================================================
+  第二步：安装 vLLM
+============================================================
+
+  pip install vllm==0.21.0
+
+
+============================================================
+  第三步：下载模型文件
+============================================================
+
+  # 设置 HuggingFace 国内镜像
+  export HF_ENDPOINT=https://hf-mirror.com
+
+  mkdir -p /root/models
+
+  # 3.1 主模型：Qwen3-8B-FP8 (8.9 GB)
+  # 从 ModelScope 下载：
+  git clone https://www.modelscope.cn/models/unsloth/Qwen3-8B-FP8.git /root/models/qwen3-8b-fp8
+
+  # 3.2 Reranker：BGE Reranker v2-m3 (4.3 GB)
+  git clone https://www.modelscope.cn/models/AI-ModelScope/bge-reranker-v2-m3.git /root/models/bge-reranker-v2-m3
+
+  # 3.3 嵌入模型：text2vec-base-multilingual (2.0 GB)
+  git clone https://www.modelscope.cn/models/AI-ModelScope/text2vec-base-multilingual.git /root/models/text2vec-base-multilingual
+
+  # 如果 git clone 大文件失败，可用 wget：
+  # wget -c -O /root/models/bge-reranker-v2-m3/model.safetensors \
+  #   "https://hf-mirror.com/BAAI/bge-reranker-v2-m3/resolve/main/model.safetensors"
+
+  # 确认模型目录完整
+  ls /root/models/qwen3-8b-fp8/model.safetensors
+  ls /root/models/bge-reranker-v2-m3/
+  ls /root/models/text2vec-base-multilingual/
+
+
+============================================================
+  第四步：安装辅助依赖
+============================================================
+
+  pip install flask flask-cors chromadb sentence-transformers
+
+
+============================================================
+  第五步：部署项目文件
+============================================================
+
+  mkdir -p /root/vLLM/chat
+
+  # 把以下文件复制到 /root/vLLM/：
+  #   job_match_api.py       → 统一网关 (Flask, 端口 8080)
+  #   import_chroma.py       → Chroma 数据导入脚本
+  #   knowledge_base.csv     → 职能知识库 CSV (2233 条记录)
+  #   chat/eval_test.html    → 前端页面 (简历评估 + 职能匹配)
+
+
+============================================================
+  第六步：导入 Chroma 向量数据库
+============================================================
+
+  source /root/venv-vllm/bin/activate
+  export HF_ENDPOINT=https://hf-mirror.com
+
+  python3 /root/vLLM/import_chroma.py
+
+  # 输出示例：
+  # Loading embedding model: /root/models/text2vec-base-multilingual
+  # Embedding dim: 768
+  # Total records to import: 2233
+  #   Imported 500/2233
+  #   Imported 1000/2233
+  #   Imported 1500/2233
+  #   Imported 2000/2233
+  #   Imported 2233/2233
+  # Done! Collection 'job_functions' has 2233 documents
+
+
+============================================================
+  第七步：启动服务
+============================================================
+
+  # 7.1 启动 vLLM (GPU 70%, 端口 9000)
+  source /root/venv-vllm/bin/activate
+
+  nohup python3 -m vllm.entrypoints.openai.api_server \
+      --model /root/models/qwen3-8b-fp8 \
+      --host 0.0.0.0 --port 9000 \
+      --max-model-len 8192 \
+      --gpu-memory-utilization 0.70 \
+      --dtype auto \
+      --served-model-name qwen3-8b-fp8 \
+      > /tmp/vllm-qwen3.log 2>&1 &
+
+  echo "vLLM PID: $!"
+
+  # 等待 vLLM 启动完成（约 30-60 秒）
+  for i in $(seq 1 60); do
+    curl -s http://localhost:9000/health >/dev/null 2>&1 && echo "vLLM ready at ${i}s" && break
+    sleep 1
+  done
+
+  # 7.2 启动统一网关 (端口 8080)
+  # 注意：gateway 启动时会预加载 embedding + reranker 模型，约需 10-15 秒
+  nohup python3 /root/vLLM/job_match_api.py > /tmp/job_match_api.log 2>&1 &
+
+  echo "Gateway PID: $!"
+
+  # 等待网关启动
+  sleep 15
+
+  # 7.3 验证所有服务
+  curl -s http://localhost:9000/health          # vLLM 健康检查
+  curl -s http://localhost:9000/v1/models       # vLLM 模型列表
+  curl -s http://localhost:8080/api/health      # 网关健康检查
+  curl -s http://localhost:8080/                # 前端页面
+  curl -s -X POST http://localhost:8080/api/search \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"自动驾驶","top_k":3,"rerank":false}'
+
+
+============================================================
+  第八步：防火墙和安全组
+============================================================
+
+  # 开放 8080 端口（统一网关，对外访问）
+  sudo ufw allow 8080/tcp
+
+  # 如果是阿里云 ECS，需要在控制台安全组规则中添加：
+  #   入方向：TCP 8080，允许 0.0.0.0/0
+
+
+============================================================
+  访问地址
+============================================================
+
+  http://<服务器公网IP>:8080/
+
+  功能：
+  - 简历评估 Tab：填写简历/JD/规则 → LLM 评估
+  - 职能匹配 Tab：输入描述 → 向量检索 + Rerank 重排
+
+
+============================================================
+  端口和架构
+============================================================
+
+  9000  → vLLM (后端 LLM，仅本机访问)
+  8080  → 统一网关 (对外访问)
+          ├── /            → eval_test.html 静态页面
+          ├── /v1/*        → 代理到 vLLM
+          ├── /api/search  → Chroma 向量检索 + Reranker 重排
+          └── /api/health  → 健康检查
+
+
+============================================================
+  GPU 显存分配
+============================================================
+
+  总计：24 GB
+  vLLM：70% ≈ 15.5 GB（KV Cache + 模型权重）
+  Reranker：~2.1 GB（CUDA 推理）
+  剩余：~6.4 GB（系统开销 + vLLM 动态分配）
+
+  重要：vLLM 不能超过 70%，否则 reranker 推理时会 OOM。
+
+
+============================================================
+  关键文件清单
+============================================================
+
+  代码文件：
+    /root/vLLM/job_match_api.py      统一网关服务
+    /root/vLLM/import_chroma.py      Chroma 数据导入脚本
+    /root/vLLM/chat/eval_test.html   前端页面
+
+  数据文件：
+    /root/vLLM/knowledge_base.csv    职能知识库 (460 KB, 2233 条)
+    /root/vLLM/chroma_db/            Chroma 向量数据库 (~6 MB)
+
+  模型文件：
+    /root/models/qwen3-8b-fp8/                  8.9 GB  主模型
+    /root/models/bge-reranker-v2-m3/            4.3 GB  重排模型
+    /root/models/text2vec-base-multilingual/    2.0 GB  嵌入模型
+
+  虚拟环境：
+    /root/venv-vllm/                             Python 3.12 虚拟环境
+
+
+============================================================
+  常用运维命令
+============================================================
+
+  # 查看服务状态
+  ps aux | grep -E "vllm|job_match" | grep -v grep
+
+  # 查看端口占用
+  ss -tlnp | grep -E "8080|9000"
+
+  # 查看日志
+  tail -f /tmp/vllm-qwen3.log
+  tail -f /tmp/job_match_api.log
+
+  # 停止 vLLM
+  ps aux | grep "vllm.entrypoints" | grep -v grep | awk '{print $2}' | xargs kill
+
+  # 停止网关
+  ps aux | grep "job_match_api" | grep -v grep | awk '{print $2}' | xargs kill
+
+  # 重启所有服务
+  # 先杀掉旧进程
+  ps aux | grep -E "vllm.entrypoints|job_match_api" | grep -v grep | awk '{print $2}' | xargs kill
+  sleep 3
+
+  # 再按第七步启动
+
+
+============================================================
+  性能指标
+============================================================
+
+  向量检索：0.02s
+  Rerank 首次：0.4s
+  Rerank 后续：0.15s
+  并发压力测试：
+    c=1  → 延迟 3.43s, 吞吐 0.29 req/s
+    c=64 → 延迟 3.05s, 吞吐 1.16 req/s
+
+
+============================================================
+  已知问题和注意事项
+============================================================
+
+  1. vLLM 0.21.0 不支持 FP8 modelopt 格式在算力 <89 的 GPU 上运行
+     → A10 (算力 86) 可以运行，但 H20/H100 等 Hopper 卡才支持 modelopt
+
+  2. GGUF 格式 vLLM 0.21.0 不支持 nemotron_h 架构
+     → Nemotron-Nano-9B-v2 GGUF 无法使用
+
+  3. reranker 必须用 CUDA，CPU 上慢 10-30 倍 (1.8-4s vs 0.15s)
+     → vLLM GPU 利用率不能超过 70%
+
+  4. 如果 Python 下载大文件 OOM，用 wget -c 替代
+
+  5. 思考模式评估分数偏低（更严格），非思考模式偏宽松
+     → 简历评估建议默认关闭思考模式
+
+  6. 浏览器代理可能导致请求慢，建议把服务器 IP 加入白名单

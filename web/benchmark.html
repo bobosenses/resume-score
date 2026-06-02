@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>压力测试报告 - Ollama Benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1923; color: #e0e6ed; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #1a3a2a 0%, #0f1923 100%); border-bottom: 1px solid #2e7d32; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .header-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .header h1 { font-size: 22px; color: #66bb6a; }
+        .header .meta { font-size: 13px; color: #81c784; }
+        .header a { color: #81c784; text-decoration: none; font-size: 13px; border: 1px solid #2e7d32; padding: 6px 14px; border-radius: 6px; transition: all 0.2s; }
+        .header a:hover { background: #2e7d32; color: #fff; }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px; }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+        .tab { padding: 8px 20px; border: 1px solid #2a3a4a; border-radius: 8px; cursor: pointer; font-size: 13px; color: #78909c; background: #1a2332; transition: all 0.2s; }
+        .tab:hover { border-color: #4caf50; color: #81c784; }
+        .tab.active { background: #2e7d32; border-color: #2e7d32; color: #fff; }
+
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+        .card { background: #1a2332; border: 1px solid #2a3a4a; border-radius: 12px; padding: 18px; }
+        .card .label { font-size: 11px; color: #81c784; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .card .value { font-size: 26px; font-weight: 700; color: #fff; }
+        .card .unit { font-size: 13px; color: #78909c; font-weight: 400; margin-left: 4px; }
+        .card .sub { font-size: 12px; color: #78909c; margin-top: 4px; }
+        .card.best { border-color: #2e7d32; }
+        .card.warn .value { color: #ff9800; }
+
+        .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+        .chart-box { background: #1a2332; border: 1px solid #2a3a4a; border-radius: 12px; padding: 20px; }
+        .chart-box h3 { font-size: 14px; color: #81c784; margin-bottom: 16px; font-weight: 600; }
+        .chart-box canvas { width: 100% !important; max-height: 280px; }
+
+        .table-wrap { background: #1a2332; border: 1px solid #2a3a4a; border-radius: 12px; overflow: auto; margin-bottom: 28px; }
+        .table-wrap h3 { font-size: 14px; color: #81c784; padding: 16px 20px; border-bottom: 1px solid #2a3a4a; font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        th { background: #0f1923; color: #81c784; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; text-align: left; white-space: nowrap; }
+        td { padding: 10px 12px; font-size: 13px; border-top: 1px solid #1e2d3d; }
+        tr:hover td { background: #1e2d3d; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge.ok { background: #1b5e20; color: #a5d6a7; }
+        .badge.warn { background: #e65100; color: #ffcc80; }
+        .badge.fail { background: #b71c1c; color: #ef9a9a; }
+        .dim-label { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; }
+
+        .scenario-info { background: #1a2332; border: 1px solid #2e7d32; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .scenario-info .badge-scenario { background: #2e7d32; color: #a5d6a7; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .scenario-info .scenario-desc { color: #81c784; font-size: 14px; }
+
+        .loading { text-align: center; padding: 80px 0; }
+        .loading .spinner { display: inline-block; width: 40px; height: 40px; border: 3px solid #2a3a4a; border-top-color: #66bb6a; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { margin-top: 16px; color: #81c784; }
+
+        .footer { text-align: center; padding: 24px; color: #546e7a; font-size: 12px; }
+
+        @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } .container { padding: 16px; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>Ollama 压力测试报告</h1>
+            <span class="meta" id="metaInfo">加载中...</span>
+        </div>
+        <div style="display:flex;gap:8px">
+            <a href="/">返回 Chat</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="loadReport('resume')">简历打分场景</div>
+            <div class="tab" onclick="loadReport('multidim')">多维度通用测试</div>
+        </div>
+
+        <div id="loadingArea" class="loading">
+            <div class="spinner"></div>
+            <p>正在加载测试数据...</p>
+        </div>
+
+        <div id="contentArea" style="display:none">
+            <div class="scenario-info" id="scenarioInfo"></div>
+            <div class="cards" id="summaryCards"></div>
+            <div class="charts" id="chartsArea"></div>
+            <div class="table-wrap">
+                <h3>详细数据</h3>
+                <div style="overflow-x:auto"><table id="detailTable"><thead></thead><tbody id="tableBody"></tbody></table></div>
+            </div>
+
+            <div class="table-wrap" id="testCasesSection">
+                <h3>测试用例 <span style="font-size:12px;color:#78909c;font-weight:400">（用于复现，点击展开）</span></h3>
+                <div id="testCasesContent" style="padding:16px 20px;color:#78909c">加载中...</div>
+            </div>
+        </div>
+    </div>
+    <div class="footer">Ollama Stress Test Dashboard</div>
+
+    <script>
+    var currentFormat = 'resume';
+    var data = null;
+
+    function switchTab(format) {
+        currentFormat = format;
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        if (format === 'resume') document.querySelector('.tab').classList.add('active');
+        else document.querySelectorAll('.tab')[1].classList.add('active');
+        loadReport(format);
+    }
+
+    window.loadReport = function(format) {
+        currentFormat = format;
+        var url = '/api/benchmark' + (format === 'multidim' ? '?report=multidim' : '');
+        fetch(url).then(function(res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        }).then(function(d) {
+            data = d;
+            if (d.dimensions && d.dimensions.length > 0) {
+                renderMultidim(d);
+            } else {
+                renderResumeScoring(d);
+            }
+        }).catch(function(e) {
+            document.getElementById('loadingArea').style.display = '';
+            document.getElementById('contentArea').style.display = 'none';
+            document.getElementById('loadingArea').innerHTML = '<p style="color:#f44336">加载失败: ' + e.message + '</p>';
+        });
+    };
+
+    function renderResumeScoring(data) {
+        document.getElementById('loadingArea').style.display = 'none';
+        document.getElementById('contentArea').style.display = '';
+        document.getElementById('metaInfo').textContent = data.model + ' | ' + data.timestamp;
+
+        var stages = data.stages;
+        if (!stages || !stages.length) return;
+
+        // Scenario info
+        document.getElementById('scenarioInfo').innerHTML =
+            '<span class="badge-scenario">' + (data.scenario || '简历打分') + '</span>' +
+            '<span class="scenario-desc">' + (data.scenario_desc || '') + '</span>';
+
+        // Summary cards
+        var bestTP = stages.reduce(function(a,b){ return a['throughput(req/s)'] > b['throughput(req/s)'] ? a : b; });
+        var first = stages[0];
+        var last = stages[stages.length-1];
+        var maxTTFT = stages.reduce(function(a,b){ return a['ttft_max(s)'] > b['ttft_max(s)'] ? a : b; });
+
+        document.getElementById('summaryCards').innerHTML =
+            '<div class="card best"><div class="label">最佳吞吐量</div><div class="value">' + bestTP['throughput(req/s)'] + '<span class="unit">req/s</span></div><div class="sub">并发 ' + bestTP.concurrency + '</div></div>' +
+            '<div class="card"><div class="label">单请求延迟 (并发1)</div><div class="value">' + first['latency_avg(s)'].toFixed(1) + '<span class="unit">s</span></div><div class="sub">TTFT ' + first['ttft_avg(s)'].toFixed(2) + 's</div></div>' +
+            '<div class="card"><div class="label">最高并发延迟</div><div class="value">' + last['latency_avg(s)'].toFixed(1) + '<span class="unit">s</span></div><div class="sub">TTFT max ' + maxTTFT['ttft_max(s)'].toFixed(1) + 's</div></div>' +
+            '<div class="card"><div class="label">输入规模</div><div class="value">' + (first['prompt_tokens_avg'] || '~7000') + '</div><div class="sub">输出 ' + (first['output_tokens_avg'] || '~500') + ' tokens avg</div></div>' +
+            '<div class="card"><div class="label">输出速率</div><div class="value">' + first['output_tps_avg'].toFixed(0) + '<span class="unit">tok/s</span></div><div class="sub">min ' + first['output_tps_min'] + ' tok/s</div></div>';
+
+        // Charts
+        var labels = stages.map(function(s){ return '并发 ' + s.concurrency; });
+        var chartOpts = {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#b0bec5', font: { size: 11 } } } },
+            scales: {
+                x: { ticks: { color: '#78909c' }, grid: { color: '#1e2d3d' } },
+                y: { ticks: { color: '#78909c' }, grid: { color: '#1e2d3d' }, beginAtZero: true }
+            }
+        };
+
+        var chartsHtml = '';
+
+        // Throughput chart
+        chartsHtml += '<div class="chart-box"><h3>吞吐量 (req/s) vs 并发数</h3><canvas id="c1"></canvas></div>';
+        chartsHtml += '<div class="chart-box"><h3>延迟 (s) vs 并发数</h3><canvas id="c2"></canvas></div>';
+        chartsHtml += '<div class="chart-box"><h3>TTFT 首Token延迟 (s) vs 并发数</h3><canvas id="c3"></canvas></div>';
+        chartsHtml += '<div class="chart-box"><h3>延时增长倍率 (并发1 = 1x)</h3><canvas id="c4"></canvas></div>';
+
+        document.getElementById('chartsArea').innerHTML = chartsHtml;
+
+        var baseLatency = stages[0]['latency_avg(s)'];
+        var baseTTFT = stages[0]['ttft_avg(s)'];
+
+        new Chart(document.getElementById('c1'), {
+            type: 'bar',
+            data: { labels: labels, datasets: [{ label: '吞吐量', data: stages.map(function(s){return s['throughput(req/s)'];}), backgroundColor: '#2e7d32', borderRadius: 4 }] },
+            options: chartOpts,
+        });
+        new Chart(document.getElementById('c2'), {
+            type: 'line',
+            data: { labels: labels, datasets: [
+                { label: 'avg', data: stages.map(function(s){return s['latency_avg(s)'];}), borderColor: '#42a5f5', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#42a5f5' },
+                { label: 'p50', data: stages.map(function(s){return s['latency_p50(s)'];}), borderColor: '#66bb6a', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#66bb6a' },
+                { label: 'max', data: stages.map(function(s){return s['latency_max(s)'];}), borderColor: '#ef5350', borderDash: [5,5], tension: 0.3, pointRadius: 5, pointBackgroundColor: '#ef5350' },
+            ]},
+            options: chartOpts,
+        });
+        new Chart(document.getElementById('c3'), {
+            type: 'line',
+            data: { labels: labels, datasets: [
+                { label: 'avg', data: stages.map(function(s){return s['ttft_avg(s)'];}), borderColor: '#ab47bc', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#ab47bc' },
+                { label: 'p50', data: stages.map(function(s){return s['ttft_p50(s)'];}), borderColor: '#26c6da', tension: 0.3, pointRadius: 5, pointBackgroundColor: '#26c6da' },
+                { label: 'max', data: stages.map(function(s){return s['ttft_max(s)'];}), borderColor: '#ff9800', borderDash: [5,5], tension: 0.3, pointRadius: 5, pointBackgroundColor: '#ff9800' },
+            ]},
+            options: chartOpts,
+        });
+        new Chart(document.getElementById('c4'), {
+            type: 'bar',
+            data: { labels: labels, datasets: [
+                { label: '延迟倍率', data: stages.map(function(s){ return s['latency_avg(s)'] / baseLatency; }), backgroundColor: '#1565c0', borderRadius: 4 },
+                { label: 'TTFT倍率', data: stages.map(function(s){ return s['ttft_avg(s)'] / baseTTFT; }), backgroundColor: '#ab47bc', borderRadius: 4 },
+            ]},
+            options: chartOpts,
+        });
+
+        // Table
+        var thead = document.getElementById('detailTable').querySelector('thead');
+        var tbody = document.getElementById('tableBody');
+        thead.innerHTML = '<tr><th>并发</th><th>成功率</th><th>吞吐量</th><th>延迟avg</th><th>延迟p50</th><th>延迟max</th><th>TTFTavg</th><th>TTFTp50</th><th>TTFTmax</th><th>输出速率</th><th>输入tok</th><th>输出tok</th></tr>';
+        tbody.innerHTML = '';
+        stages.forEach(function(s){
+            var rate = s['success_rate(%)'];
+            var badge = rate >= 95 ? 'ok' : rate >= 70 ? 'warn' : 'fail';
+            tbody.innerHTML += '<tr>' +
+                '<td>' + s.concurrency + '</td>' +
+                '<td><span class="badge ' + badge + '">' + rate + '%</span></td>' +
+                '<td>' + s['throughput(req/s)'] + '/s</td>' +
+                '<td>' + s['latency_avg(s)'] + 's</td>' +
+                '<td>' + s['latency_p50(s)'] + 's</td>' +
+                '<td>' + s['latency_max(s)'] + 's</td>' +
+                '<td>' + s['ttft_avg(s)'] + 's</td>' +
+                '<td>' + s['ttft_p50(s)'] + 's</td>' +
+                '<td>' + s['ttft_max(s)'] + 's</td>' +
+                '<td>' + s['output_tps_avg'] + 't/s</td>' +
+                '<td>' + (s['prompt_tokens_avg'] || '-') + '</td>' +
+                '<td>' + (s['output_tokens_avg'] || '-') + '</td>' +
+                '</tr>';
+        });
+    }
+
+    function renderMultidim(data) {
+        document.getElementById('loadingArea').style.display = 'none';
+        document.getElementById('contentArea').style.display = '';
+        document.getElementById('metaInfo').textContent = data.model + ' | ' + data.timestamp;
+
+        var stages = data.stages;
+        var dims = data.dimensions || [];
+        var DIM_COLORS = {'简单知识': '#4caf50', '推理分析': '#2196f3', '长文生成': '#ff9800', '代码生成': '#ab47bc', '创意写作': '#26c6da'};
+
+        document.getElementById('scenarioInfo').innerHTML =
+            '<span class="badge-scenario">多维度通用测试</span><span class="scenario-desc">' + dims.map(function(d){return d.name + '(' + d.max_tokens + 't)';}).join(' + ') + '</span>';
+
+        var bestTP = stages.reduce(function(a,b){ return a['throughput(req/s)'] > b['throughput(req/s)'] ? a : b; });
+        var first = stages[0];
+        var last = stages[stages.length-1];
+
+        document.getElementById('summaryCards').innerHTML =
+            '<div class="card best"><div class="label">最佳吞吐量</div><div class="value">' + bestTP['throughput(req/s)'] + '<span class="unit">req/s</span></div><div class="sub">并发 ' + bestTP.concurrency + '</div></div>' +
+            '<div class="card"><div class="label">并发1延迟</div><div class="value">' + first['latency_avg(s)'].toFixed(1) + '<span class="unit">s</span></div></div>' +
+            '<div class="card"><div class="label">并发' + last.concurrency + '延迟</div><div class="value">' + last['latency_avg(s)'].toFixed(1) + '<span class="unit">s</span></div></div>' +
+            '<div class="card"><div class="label">测试维度</div><div class="value">' + dims.length + '</div><div class="sub">' + dims.map(function(d){return d.name;}).join(' / ') + '</div></div>' +
+            '<div class="card"><div class="label">输出速率</div><div class="value">' + first['output_tps_avg'].toFixed(0) + '<span class="unit">tok/s</span></div></div>';
+
+        var labels = stages.map(function(s){ return '并发 ' + s.concurrency; });
+        var chartOpts = {
+            responsive: true,
+            plugins: { legend: { labels: { color: '#b0bec5', font: { size: 11 } } } },
+            scales: { x: { ticks: { color: '#78909c' }, grid: { color: '#1e2d3d' } }, y: { ticks: { color: '#78909c' }, grid: { color: '#1e2d3d' }, beginAtZero: true } }
+        };
+
+        document.getElementById('chartsArea').innerHTML =
+            '<div class="chart-box"><h3>吞吐量</h3><canvas id="c1"></canvas></div>' +
+            '<div class="chart-box"><h3>延迟</h3><canvas id="c2"></canvas></div>' +
+            '<div class="chart-box"><h3>TTFT</h3><canvas id="c3"></canvas></div>' +
+            '<div class="chart-box"><h3>输出速率</h3><canvas id="c4"></canvas></div>';
+
+        new Chart(document.getElementById('c1'), { type:'bar', data:{labels:labels, datasets:[{label:'吞吐量',data:stages.map(function(s){return s['throughput(req/s)'];}),backgroundColor:'#2e7d32',borderRadius:4}]}, options:chartOpts });
+        new Chart(document.getElementById('c2'), { type:'line', data:{labels:labels, datasets:[
+            {label:'avg',data:stages.map(function(s){return s['latency_avg(s)'];}),borderColor:'#42a5f5',tension:0.3,pointRadius:5},
+            {label:'p50',data:stages.map(function(s){return s['latency_p50(s)'];}),borderColor:'#66bb6a',tension:0.3,pointRadius:5},
+        ]}, options:chartOpts });
+        new Chart(document.getElementById('c3'), { type:'line', data:{labels:labels, datasets:[
+            {label:'avg',data:stages.map(function(s){return s['ttft_avg(s)'];}),borderColor:'#ab47bc',tension:0.3,pointRadius:5},
+            {label:'p50',data:stages.map(function(s){return s['ttft_p50(s)'];}),borderColor:'#26c6da',tension:0.3,pointRadius:5},
+        ]}, options:chartOpts });
+        new Chart(document.getElementById('c4'), { type:'bar', data:{labels:labels, datasets:[
+            {label:'avg t/s',data:stages.map(function(s){return s['output_tps_avg'];}),backgroundColor:'#1565c0',borderRadius:4},
+        ]}, options:chartOpts });
+
+        // Dimension detail table
+        var thead = document.getElementById('detailTable').querySelector('thead');
+        var tbody = document.getElementById('tableBody');
+        thead.innerHTML = '<tr><th>并发</th><th>维度</th><th>请求数</th><th>延迟avg</th><th>TTFTavg</th><th>输出速率</th><th>token数</th></tr>';
+        tbody.innerHTML = '';
+        stages.forEach(function(s){
+            if (!s.dimensions) return;
+            Object.keys(s.dimensions).forEach(function(dimName){
+                var d = s.dimensions[dimName];
+                var color = DIM_COLORS[dimName] || '#78909c';
+                tbody.innerHTML += '<tr>' +
+                    '<td>' + s.concurrency + '</td>' +
+                    '<td><span class="dim-label" style="background:' + color + '">' + dimName + '</span></td>' +
+                    '<td>' + d.count + '</td>' +
+                    '<td>' + d['latency_avg(s)'] + 's</td>' +
+                    '<td>' + d['ttft_avg(s)'] + 's</td>' +
+                    '<td>' + d['output_tps_avg'] + ' t/s</td>' +
+                    '<td>' + d['tokens_avg'] + '</td></tr>';
+            });
+        });
+    }
+
+    function loadTestCases() {
+        fetch('/api/test-cases').then(function(r){ return r.json(); }).then(function(tc){
+            var html = '';
+            // JD + Rules summary
+            html += '<div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap">';
+            html += '<span style="background:#1b5e20;color:#a5d6a7;padding:4px 10px;border-radius:4px;font-size:12px">模型: ' + (tc.model || '-') + '</span>';
+            html += '<span style="background:#0d47a1;color:#90caf9;padding:4px 10px;border-radius:4px;font-size:12px">简历: ' + tc.resumes.length + ' 份</span>';
+            html += '<span style="background:#e65100;color:#ffcc80;padding:4px 10px;border-radius:4px;font-size:12px">JD: ' + (tc.jd_char_count || 0) + ' chars</span>';
+            html += '<span style="background:#4a148c;color:#ce93d8;padding:4px 10px;border-radius:4px;font-size:12px">规则: ' + (tc.rules_char_count || 0) + ' chars</span>';
+            html += '</div>';
+
+            // Each prompt
+            (tc.prompts || []).forEach(function(p, idx){
+                var collapsed = idx > 0;
+                html += '<div style="border:1px solid #2a3a4a;border-radius:8px;margin-bottom:8px;overflow:hidden">';
+                html += '<div onclick="var el=this.nextElementSibling;el.style.display=el.style.display==\'none\'?\'block\':\'none\';this.querySelector(\'.arrow\').textContent=el.style.display==\'none\'?\'▶\':\'▼\';" style="cursor:pointer;padding:10px 14px;background:#0f1923;display:flex;justify-content:space-between;align-items:center">';
+                html += '<span style="color:#81c784;font-weight:600">测试用例 #' + (idx+1) + '</span>';
+                html += '<span style="color:#78909c;font-size:12px">' + p.char_count.toLocaleString() + ' chars <span class="arrow">' + (collapsed ? '▶' : '▼') + '</span></span>';
+                html += '</div>';
+                html += '<div style="display:' + (collapsed ? 'none' : 'block') + ';padding:14px;max-height:400px;overflow-y:auto;background:#111d2a">';
+                html += '<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.6;color:#b0bec5;margin:0">' + escapeHtml(p.prompt.substring(0, 3000)) + (p.prompt.length > 3000 ? '\n\n... [截断，共 ' + p.prompt.length.toLocaleString() + ' 字符]' : '') + '</pre>';
+                html += '<button onclick="copyPrompt(' + idx + ')" style="margin-top:8px;background:#2e7d32;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">复制完整Prompt</button>';
+                html += '</div></div>';
+            });
+
+            document.getElementById('testCasesContent').innerHTML = html;
+            window._tcPrompts = tc.prompts || [];
+        }).catch(function(e){
+            document.getElementById('testCasesContent').innerHTML = '<span style="color:#ef5350">加载测试用例失败: ' + e.message + '</span>';
+        });
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    window.copyPrompt = function(idx) {
+        var p = window._tcPrompts && window._tcPrompts[idx];
+        if (!p) return;
+        navigator.clipboard.writeText(p.prompt).then(function(){
+            alert('已复制测试用例 #' + (idx+1) + ' (' + p.char_count.toLocaleString() + ' chars)');
+        }).catch(function(){
+            alert('复制失败，请手动选择文本');
+        });
+    };
+
+    // Init
+    loadReport('resume');
+    loadTestCases();
+    </script>
+</body>
+</html>

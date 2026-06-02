@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简历智能处理 + AI Chat</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #764ba2;
+            --bg: #f8f9ff;
+            --card-bg: #fff;
+            --text: #2d3748;
+            --text-secondary: #718096;
+            --border: #e2e8f0;
+            --radius: 12px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.06);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1a1b2e;
+                --card-bg: #252740;
+                --text: #e2e8f0;
+                --text-secondary: #a0aec0;
+                --border: #2d3748;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--gradient);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .header h1 { font-size: 20px; color: #fff; font-weight: 700; }
+        .header .subtitle { font-size: 13px; color: rgba(255,255,255,0.75); }
+        .header .nav-right { margin-left: auto; display: flex; gap: 8px; }
+        .header .nav-right a {
+            color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.35); padding: 6px 14px; border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .header .nav-right a:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+        /* Tabs */
+        .tab-nav {
+            display: flex; justify-content: center; gap: 4px;
+            padding: 12px 24px; background: var(--card-bg);
+            border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .tab-btn {
+            padding: 8px 28px; border: none; background: #f1f5f9;
+            color: var(--text-secondary); cursor: pointer; font-size: 14px;
+            font-weight: 600; border-radius: 22px; transition: all 0.2s;
+            font-family: inherit;
+        }
+        .tab-btn:hover { background: #e2e8f0; color: var(--text); }
+        .tab-btn.active { background: var(--gradient); color: #fff; }
+
+        /* Main Content */
+        .main-content {
+            flex: 1; overflow: hidden; display: flex;
+            padding: 20px 24px; gap: 20px;
+        }
+
+        /* Chat Panel */
+        #chatPanel {
+            flex: 1; display: flex; flex-direction: column;
+        }
+        #chatbox {
+            flex: 1; overflow-y: auto; padding: 16px 0;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .msg {
+            max-width: 75%; padding: 12px 16px; border-radius: 12px;
+            line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-break: break-word;
+        }
+        .msg.user { align-self: flex-end; background: var(--gradient); color: #fff; border-bottom-right-radius: 4px; }
+        .msg.assistant { align-self: flex-start; background: var(--card-bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .msg .role { font-size: 11px; margin-bottom: 4px; font-weight: 600; opacity: 0.7; }
+        .chat-input-area {
+            display: flex; gap: 12px; padding: 12px 0 0 0;
+            border-top: 1px solid var(--border);
+        }
+        .chat-input-area textarea {
+            flex: 1; border: 1px solid var(--border); border-radius: 8px;
+            padding: 10px 14px; font-size: 14px; font-family: inherit;
+            background: var(--card-bg); color: var(--text); outline: none; resize: none;
+        }
+        .chat-input-area textarea:focus { border-color: var(--primary); }
+        .chat-input-area textarea::placeholder { color: var(--text-secondary); }
+        .btn-primary {
+            background: var(--gradient); color: #fff; border: none; border-radius: 8px;
+            padding: 10px 22px; cursor: pointer; font-size: 14px; font-weight: 600;
+            transition: all 0.2s; font-family: inherit; white-space: nowrap;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary {
+            background: #4a5568; color: #fff; border: none;
+            border-radius: 8px; padding: 10px 22px; cursor: pointer; font-size: 14px;
+            font-weight: 500; transition: all 0.2s; font-family: inherit;
+        }
+        .btn-secondary:hover { background: #2d3748; }
+        .btn-small {
+            background: #4a5568; color: #fff; border: none;
+            border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .btn-small:hover { background: #2d3748; }
+        .typing { color: var(--primary); letter-spacing: 2px; }
+
+        /* Scoring Panel */
+        #scoringPanel {
+            flex: 1; display: flex; gap: 20px; overflow: hidden;
+        }
+        .input-section {
+            flex: 1; display: flex; flex-direction: column; gap: 14px;
+            overflow-y: auto; min-width: 0;
+        }
+        .result-section {
+            flex: 1; display: flex; flex-direction: column;
+            min-width: 0;
+        }
+        .input-block h3 {
+            font-size: 13px; color: var(--text); margin-bottom: 6px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .input-block h3 .badge {
+            font-size: 11px; padding: 2px 8px; border-radius: 10px;
+            font-weight: 500;
+        }
+        .badge-resume { background: #e8f5e9; color: #2e7d32; }
+        .badge-jd { background: #e3f2fd; color: #1565c0; }
+        .badge-rules { background: #fce4ec; color: #c62828; }
+        .input-block textarea {
+            width: 100%; border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px 14px; font-size: 13px; font-family: inherit;
+            background: var(--card-bg); color: var(--text); outline: none; resize: vertical;
+            line-height: 1.6;
+        }
+        .input-block textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+        .input-block textarea::placeholder { color: var(--text-secondary); }
+        .input-block .hint {
+            font-size: 11px; color: var(--text-secondary); margin-top: 4px;
+            display: flex; justify-content: space-between;
+        }
+        .result-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 10px; flex-shrink: 0;
+        }
+        .result-header h3 { font-size: 14px; }
+        .result-header .actions { display: flex; gap: 6px; }
+        .result-container {
+            flex: 1; overflow-y: auto; border: 1px solid var(--border);
+            border-radius: 10px; background: var(--card-bg); padding: 16px;
+            min-height: 200px;
+        }
+        .result-container .empty {
+            color: var(--text-secondary); text-align: center; padding-top: 80px;
+            font-size: 14px;
+        }
+        .result-content {
+            font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+            font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .metrics-bar {
+            display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;
+            font-size: 12px; color: var(--text-secondary);
+        }
+        .metric-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+
+        /* Thinking Toggle Switch */
+        .thinking-toggle { display: flex; align-items: center; gap: 8px; }
+        .thinking-toggle label { cursor: pointer; user-select: none; }
+        .switch {
+            position: relative; display: inline-block; width: 40px; height: 22px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #cbd5e0; border-radius: 22px; transition: 0.25s;
+        }
+        .switch .slider::before {
+            content: ''; position: absolute; height: 16px; width: 16px;
+            left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.25s;
+        }
+        .switch input:checked + .slider { background: var(--gradient); }
+        .switch input:checked + .slider::before { transform: translateX(18px); }
+
+        /* Thinking Block (collapsible) */
+        .think-block {
+            margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px;
+            background: var(--bg); overflow: hidden;
+        }
+        .think-block summary {
+            padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600;
+            color: var(--primary); display: flex; align-items: center; gap: 6px;
+            user-select: none;
+        }
+        .think-block summary:hover { background: rgba(102,126,234,0.06); }
+        .think-block summary .think-icon { font-size: 14px; }
+        .think-block .think-content {
+            padding: 10px 14px; font-size: 12px; line-height: 1.7;
+            color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;
+            border-top: 1px solid var(--border); max-height: 300px; overflow-y: auto;
+            font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+        }
+        .think-block .think-content .cursor { color: var(--primary); animation: blink 1s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Config Bar */
+        .config-bar {
+            display: flex; align-items: center; gap: 16px; padding: 10px 24px;
+            background: var(--card-bg); border-top: 1px solid var(--border);
+            flex-shrink: 0; font-size: 13px; flex-wrap: wrap;
+        }
+        .config-bar label { color: var(--text-secondary); font-weight: 600; }
+        .config-bar input, .config-bar select {
+            border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px;
+            font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); outline: none;
+        }
+        .config-bar input:focus { border-color: var(--primary); }
+        .config-bar input[type="number"] { width: 80px; }
+
+        @media (max-width: 900px) {
+            #scoringPanel { flex-direction: column; }
+            .result-container { min-height: 300px; }
+            .main-content { padding: 12px; gap: 12px; }
+        }
+
+        /* Settings Panel */
+        .setting-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+            padding: 16px 20px; margin-bottom: 14px;
+        }
+        .setting-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px;
+        }
+        .setting-label {
+            display: flex; align-items: center; gap: 12px; flex: 1;
+        }
+        .setting-icon { font-size: 20px; }
+        .setting-title { font-size: 14px; font-weight: 600; color: var(--text); }
+        .setting-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+        .setting-hint {
+            font-size: 12px; color: var(--text-secondary); margin-top: 10px;
+            padding-top: 10px; border-top: 1px solid var(--border);
+        }
+        .setting-input {
+            width: 100%; margin-top: 12px; border: 1px solid var(--border); border-radius: 8px;
+            padding: 8px 12px; font-size: 13px; font-family: "SF Mono", Consolas, monospace;
+            background: var(--bg); color: var(--text); outline: none;
+        }
+        .setting-input:focus { border-color: var(--primary); }
+        .setting-input-sm {
+            border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px;
+            font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text);
+            outline: none; width: 100px; text-align: center;
+        }
+        .setting-input-sm:focus { border-color: var(--primary); }
+        .setting-textarea {
+            width: 100%; border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px 14px; font-size: 12px; font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+            background: var(--bg); color: var(--text); outline: none; resize: vertical;
+            line-height: 1.6;
+        }
+        .setting-textarea:focus { border-color: var(--primary); }
+        .setting-textarea[readonly] { background: var(--bg); opacity: 0.85; }
+        .btn-edit {
+            background: #ed8936; color: #fff; border: none; border-radius: 8px;
+            padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 600;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .btn-edit:hover { background: #dd6b20; }
+        .btn-save {
+            background: #48bb78; color: #fff; border: none; border-radius: 8px;
+            padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 600;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .btn-save:hover { background: #38a169; }
+        .btn-reset {
+            background: #718096; color: #fff; border: none; border-radius: 8px;
+            padding: 8px 18px; cursor: pointer; font-size: 13px; font-weight: 500;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .btn-reset:hover { background: #4a5568; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>简历智能处理工具</h1>
+        <span class="subtitle">Qwen3-8B-FP8 本地模型 (vLLM)</span>
+        <div class="nav-right">
+            <a href="/benchmark">压测报告</a>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('score')">简历打分</button>
+        <button class="tab-btn" onclick="switchTab('chat')">AI Chat</button>
+        <button class="tab-btn" onclick="switchTab('settings')">⚙️ 系统设置</button>
+    </div>
+
+    <!-- Main -->
+    <div class="main-content">
+        <!-- Resume Scoring Panel -->
+        <div id="scoringPanel">
+            <!-- Left: 3 Input Blocks -->
+            <div class="input-section">
+                <div class="input-block">
+                    <h3><span class="badge badge-resume">简历</span> 候选人简历内容</h3>
+                    <textarea id="resumeInput" rows="14" placeholder="在此粘贴候选人简历...&#10;支持从PDF/Word复制文本，或从测试用例中选择模板"></textarea>
+                    <div class="hint">
+                        <span id="resumeCharCount">0 字符</span>
+                        <span id="resumeTokenEst">~0 tokens</span>
+                    </div>
+                </div>
+
+                <div class="input-block">
+                    <h3><span class="badge badge-jd">JD</span> 职位描述</h3>
+                    <textarea id="jdInput" rows="10" placeholder="在此粘贴职位描述(Job Description)...&#10;包括岗位职责、任职要求、加分项等"></textarea>
+                    <div class="hint">
+                        <span id="jdCharCount">0 字符</span>
+                        <span id="jdTokenEst">~0 tokens</span>
+                    </div>
+                </div>
+
+                <div class="input-block">
+                    <h3><span class="badge badge-rules">规则</span> 打分规则</h3>
+                    <textarea id="rulesInput" rows="8" placeholder="在此定义打分规则...&#10;包括评分维度、分值权重、评分标准、输出格式要求等"></textarea>
+                    <div class="hint">
+                        <span id="rulesCharCount">0 字符</span>
+                        <span id="rulesTokenEst">~0 tokens</span>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn-primary" id="scoreBtn" onclick="startScoring()">开始打分</button>
+                    <button class="btn-secondary" onclick="loadTestCase()">加载测试用例</button>
+                    <button class="btn-secondary" onclick="clearScoreInputs()">清空</button>
+                </div>
+
+                <!-- Test case selector (hidden by default) -->
+                <div id="testCaseSelector" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--card-bg)">
+                    <h3 style="font-size:13px;margin-bottom:10px">选择压测用例模板（复用压测中的简历+JD+规则）</h3>
+                    <div id="testCaseList" style="display:flex;flex-direction:column;gap:8px">加载中...</div>
+                </div>
+            </div>
+
+            <!-- Right: Result -->
+            <div class="result-section">
+                <div class="result-header">
+                    <h3>打分结果</h3>
+                    <div class="actions">
+                        <button class="btn-small" onclick="formatScoreResult()">格式化</button>
+                        <button class="btn-small" onclick="copyScoreResult()">复制</button>
+                    </div>
+                </div>
+                <div class="result-container" id="scoreResultContainer">
+                    <div class="empty" id="scoreEmpty">点击「开始打分」查看 AI 评分结果</div>
+                    <pre class="result-content" id="scoreResultContent" style="display:none"></pre>
+                </div>
+                <div class="metrics-bar" id="scoreMetrics" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div id="chatPanel" style="display:none">
+            <div id="chatbox"></div>
+            <div class="chat-input-area">
+                <textarea id="chatInput" rows="2" placeholder="输入消息..."></textarea>
+                <button class="btn-primary" id="chatSendBtn">发送</button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settingsPanel" style="display:none;flex:1;overflow-y:auto">
+            <div style="height:100%;padding:20px 0;display:flex;flex-direction:column">
+                <!-- 顶部标题栏 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-shrink:0">
+                    <h2 style="font-size:18px;color:var(--text)">⚙️ 系统设置</h2>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn-edit" id="settingsEditBtn" onclick="enableSettingsEdit()">✏️ 编辑</button>
+                        <button class="btn-save" id="settingsSaveBtn" onclick="saveAllSettings()" style="display:none">💾 保存</button>
+                    </div>
+                </div>
+
+                <!-- 左右两栏 -->
+                <div style="display:flex;gap:20px;flex:1;min-height:0">
+
+                    <!-- 左栏：模型参数 -->
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+                        <h3 style="font-size:14px;color:var(--text-secondary);font-weight:600;flex-shrink:0">模型参数</h3>
+
+                        <!-- 思考模式 -->
+                        <div class="setting-card">
+                            <div class="setting-row">
+                                <div class="setting-label">
+                                    <span class="setting-icon">💭</span>
+                                    <div>
+                                        <div class="setting-title">思考模式</div>
+                                        <div class="setting-desc">开启后模型会先深度推理再回答</div>
+                                    </div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="settingThinking" disabled>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-hint" id="thinkingHint">当前状态：关闭</div>
+                        </div>
+
+                        <!-- 模型名称 -->
+                        <div class="setting-card">
+                            <div class="setting-label" style="margin-bottom:10px">
+                                <span class="setting-icon">🤖</span>
+                                <div>
+                                    <div class="setting-title">模型名称</div>
+                                    <div class="setting-desc">vLLM 加载的模型路径</div>
+                                </div>
+                            </div>
+                            <input type="text" id="settingModel" class="setting-input" value="/root/vLLM/models/Qwen3-8B-FP8" readonly>
+                        </div>
+
+                        <!-- Temperature -->
+                        <div class="setting-card">
+                            <div class="setting-row">
+                                <div class="setting-label">
+                                    <span class="setting-icon">🌡️</span>
+                                    <div>
+                                        <div class="setting-title">Temperature</div>
+                                        <div class="setting-desc">采样温度 0~1，越低越确定</div>
+                                    </div>
+                                </div>
+                                <input type="number" id="settingTemp" class="setting-input-sm" value="0.1" step="0.1" min="0" max="1" readonly>
+                            </div>
+                        </div>
+
+                        <!-- 最大输出 tokens -->
+                        <div class="setting-card">
+                            <div class="setting-row">
+                                <div class="setting-label">
+                                    <span class="setting-icon">📝</span>
+                                    <div>
+                                        <div class="setting-title">最大输出 tokens</div>
+                                        <div class="setting-desc">单次请求最大输出长度</div>
+                                    </div>
+                                </div>
+                                <input type="number" id="settingMaxTokens" class="setting-input-sm" value="600" min="100" max="8000" readonly>
+                            </div>
+                        </div>
+
+                        <!-- 恢复默认 -->
+                        <div style="margin-top:auto;padding-top:10px">
+                            <button class="btn-reset" onclick="resetSettings()">↩️ 恢复默认</button>
+                        </div>
+                    </div>
+
+                    <!-- 右栏：打分规则 -->
+                    <div style="flex:1.6;min-width:0;display:flex;flex-direction:column">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0">
+                            <h3 style="font-size:14px;color:var(--text-secondary);font-weight:600">打分规则</h3>
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <span id="settingRulesStatus" style="font-size:12px;color:var(--text-secondary)">加载中...</span>
+                                <button class="btn-small" onclick="loadRulesFromServer()">🔄 重新加载</button>
+                            </div>
+                        </div>
+                        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+                            <textarea id="settingRules" class="setting-textarea" readonly placeholder="打分规则加载中..." style="flex:1;min-height:200px;resize:both"></textarea>
+                        </div>
+                        <div class="setting-hint" style="flex-shrink:0;margin-top:8px">
+                            <span>修改后点击「💾 保存」立即生效，无需重启服务</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Bar -->
+    <div class="config-bar">
+        <label>模型</label>
+        <input type="text" id="modelName" value="/root/vLLM/models/Qwen3-8B-FP8" style="width:320px">
+        <label>Temperature</label>
+        <input type="number" id="temperature" value="0.1" step="0.1" min="0" max="1">
+        <label>最大输出</label>
+        <input type="number" id="maxTokens" value="600" min="100" max="8000">
+        <div class="thinking-toggle">
+            <label class="switch">
+                <input type="checkbox" id="thinkingToggle">
+                <span class="slider"></span>
+            </label>
+            <label for="thinkingToggle">💭 思考模式</label>
+        </div>
+        <span style="margin-left:auto;color:var(--text-secondary)">输入 ~<span id="totalTokenEst">0</span> tokens | 输出 ~<span id="outputTokenCount">0</span> tokens</span>
+    </div>
+
+    <script>
+    // ========== Thinking Mode Helpers ==========
+    var thinkingToggle = document.getElementById('thinkingToggle');
+
+    function escapeHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    /**
+     * Parse streamed text containing <think>...</think> and render into a container.
+     * Returns updated state for next call.
+     */
+    function updateStreamingContent(container, text, state) {
+        // state: { think: '', answer: '', inThink: false }
+        var i = 0;
+        while (i < text.length) {
+            if (!state.inThink) {
+                var thinkStart = text.indexOf('<think>', i);
+                if (thinkStart === -1) {
+                    state.answer += text.substring(i);
+                    break;
+                } else {
+                    state.answer += text.substring(i, thinkStart);
+                    state.inThink = true;
+                    i = thinkStart + 7;
+                }
+            } else {
+                var thinkEnd = text.indexOf('</think>', i);
+                if (thinkEnd === -1) {
+                    state.think += text.substring(i);
+                    break;
+                } else {
+                    state.think += text.substring(i, thinkEnd);
+                    state.inThink = false;
+                    i = thinkEnd + 8;
+                }
+            }
+        }
+
+        var html = '';
+        if (state.think) {
+            var open = state.inThink ? ' open' : '';
+            html += '<details class="think-block"' + open + '>';
+            html += '<summary><span class="think-icon">💭</span> 思考过程 (' + state.think.length + ' 字符)</summary>';
+            html += '<pre class="think-content">' + escapeHtml(state.think);
+            if (state.inThink) html += '<span class="cursor">▌</span>';
+            html += '</pre></details>';
+        }
+        if (state.answer) {
+            html += '<span style="white-space:pre-wrap">' + escapeHtml(state.answer) + '</span>';
+        }
+        container.innerHTML = html;
+        return state;
+    }
+
+    // ========== Tab Switching ==========
+    window.switchTab = function(tab) {
+        document.querySelectorAll('.tab-btn').forEach(function(b, i) {
+            b.classList.toggle('active', (i === 0 && tab === 'score') || (i === 1 && tab === 'chat') || (i === 2 && tab === 'settings'));
+        });
+        document.getElementById('scoringPanel').style.display = tab === 'score' ? 'flex' : 'none';
+        document.getElementById('chatPanel').style.display = tab === 'chat' ? 'flex' : 'none';
+        document.getElementById('settingsPanel').style.display = tab === 'settings' ? 'flex' : 'none';
+        // 隐藏/显示底部配置栏
+        document.querySelector('.config-bar').style.display = tab === 'settings' ? 'none' : 'flex';
+    };
+
+    // ========== Settings Persistence (localStorage) ==========
+    var SETTINGS_KEY = 'vllm_settings';
+    var DEFAULT_SETTINGS = {
+        thinking: false,
+        model: '/root/vLLM/models/Qwen3-8B-FP8',
+        temperature: 0.1,
+        maxTokens: 600
+    };
+
+    function loadSettings() {
+        try {
+            var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            return Object.assign({}, DEFAULT_SETTINGS, saved || {});
+        } catch(e) {
+            return DEFAULT_SETTINGS;
+        }
+    }
+
+    function applySettings(s) {
+        // 设置面板
+        document.getElementById('settingThinking').checked = s.thinking;
+        document.getElementById('settingModel').value = s.model;
+        document.getElementById('settingTemp').value = s.temperature;
+        document.getElementById('settingMaxTokens').value = s.maxTokens;
+        // 底部配置栏同步
+        document.getElementById('thinkingToggle').checked = s.thinking;
+        document.getElementById('modelName').value = s.model;
+        document.getElementById('temperature').value = s.temperature;
+        document.getElementById('maxTokens').value = s.maxTokens;
+        // 思考模式提示文字
+        updateThinkingHint(s.thinking);
+    }
+
+    function updateThinkingHint(enabled) {
+        var hint = document.getElementById('thinkingHint');
+        if (hint) {
+            hint.textContent = enabled
+                ? '当前状态：开启 — 模型会先推理再回答（响应更慢，质量更高）'
+                : '当前状态：关闭 — 模型直接回答（响应更快）';
+        }
+    }
+
+    function setSettingsEditable(editable) {
+        var ids = ['settingThinking', 'settingModel', 'settingTemp', 'settingMaxTokens', 'settingRules'];
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') {
+                el.disabled = !editable;
+            } else {
+                el.readOnly = !editable;
+            }
+        });
+        document.getElementById('settingsEditBtn').style.display = editable ? 'none' : '';
+        document.getElementById('settingsSaveBtn').style.display = editable ? '' : 'none';
+    }
+
+    window.enableSettingsEdit = function() {
+        setSettingsEditable(true);
+    };
+
+    window.saveAllSettings = function() {
+        // 保存模型参数到 localStorage
+        var s = {
+            thinking: document.getElementById('settingThinking').checked,
+            model: document.getElementById('settingModel').value,
+            temperature: parseFloat(document.getElementById('settingTemp').value) || 0.1,
+            maxTokens: parseInt(document.getElementById('settingMaxTokens').value) || 600
+        };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+        applySettings(s);
+
+        // 保存打分规则到服务器
+        var rulesText = document.getElementById('settingRules').value;
+        var statusEl = document.getElementById('settingRulesStatus');
+        statusEl.textContent = '保存中...';
+        statusEl.style.color = 'var(--text-secondary)';
+
+        fetch('/api/scoring-rules', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: rulesText })
+        }).then(function(resp) { return resp.json(); }).then(function(data) {
+            if (data.message) {
+                statusEl.textContent = '✅ 已保存 (v' + (data.version || '?') + ', ' + (data.rules_length || 0) + ' 字符)';
+                statusEl.style.color = '#48bb78';
+            } else {
+                statusEl.textContent = '❌ 保存失败: ' + (data.detail || '未知错误');
+                statusEl.style.color = '#e53e3e';
+            }
+        }).catch(function(e) {
+            statusEl.textContent = '❌ 保存失败: ' + e.message;
+            statusEl.style.color = '#e53e3e';
+        });
+
+        setSettingsEditable(false);
+    };
+
+    window.resetSettings = function() {
+        localStorage.removeItem(SETTINGS_KEY);
+        applySettings(DEFAULT_SETTINGS);
+        setSettingsEditable(false);
+    };
+
+    // 从服务器加载打分规则
+    window.loadRulesFromServer = function() {
+        var statusEl = document.getElementById('settingRulesStatus');
+        statusEl.textContent = '加载中...';
+        statusEl.style.color = 'var(--text-secondary)';
+
+        fetch('/api/scoring-rules').then(function(resp) { return resp.json(); }).then(function(data) {
+            if (data.rules) {
+                document.getElementById('settingRules').value = data.rules;
+                statusEl.textContent = '✅ 已加载 (v' + (data.version || '?') + ', ' + (data.rules_length || 0) + ' 字符)';
+                statusEl.style.color = '#48bb78';
+            } else if (data.rules_preview) {
+                // 完整规则需要单独获取
+                document.getElementById('settingRules').value = data.rules_preview + '\n\n... (完整规则请通过 API 获取)';
+                statusEl.textContent = 'v' + (data.version || '?') + ' | ' + (data.rules_length || 0) + ' 字符';
+                statusEl.style.color = 'var(--text-secondary)';
+            } else {
+                statusEl.textContent = '❌ 规则加载失败';
+                statusEl.style.color = '#e53e3e';
+            }
+        }).catch(function(e) {
+            statusEl.textContent = '❌ 加载失败: ' + e.message;
+            statusEl.style.color = '#e53e3e';
+        });
+    };
+
+    // 同步底部配置栏变化到设置面板
+    function syncConfigBarToSettings() {
+        var s = {
+            thinking: document.getElementById('thinkingToggle').checked,
+            model: document.getElementById('modelName').value,
+            temperature: parseFloat(document.getElementById('temperature').value) || 0.1,
+            maxTokens: parseInt(document.getElementById('maxTokens').value) || 600
+        };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+        applySettings(s);
+    }
+
+    document.getElementById('thinkingToggle').addEventListener('change', syncConfigBarToSettings);
+    document.getElementById('modelName').addEventListener('change', syncConfigBarToSettings);
+    document.getElementById('temperature').addEventListener('change', syncConfigBarToSettings);
+    document.getElementById('maxTokens').addEventListener('change', syncConfigBarToSettings);
+
+    // 页面加载时应用设置 + 加载规则
+    applySettings(loadSettings());
+    loadRulesFromServer();
+
+    // ========== Character & Token Counting ==========
+    var resumeInput = document.getElementById('resumeInput');
+    var jdInput = document.getElementById('jdInput');
+    var rulesInput = document.getElementById('rulesInput');
+
+    function updateCharCount() {
+        var rlen = resumeInput.value.length;
+        var jlen = jdInput.value.length;
+        var rulen = rulesInput.value.length;
+        document.getElementById('resumeCharCount').textContent = rlen.toLocaleString() + ' 字符';
+        document.getElementById('jdCharCount').textContent = jlen.toLocaleString() + ' 字符';
+        document.getElementById('rulesCharCount').textContent = rulen.toLocaleString() + ' 字符';
+
+        // Rough estimate: 1.4 chars per token for Chinese mixed text
+        document.getElementById('resumeTokenEst').textContent = '~' + Math.round(rlen / 1.4).toLocaleString() + ' tokens';
+        document.getElementById('jdTokenEst').textContent = '~' + Math.round(jlen / 1.4).toLocaleString() + ' tokens';
+        document.getElementById('rulesTokenEst').textContent = '~' + Math.round(rulen / 1.4).toLocaleString() + ' tokens';
+        document.getElementById('totalTokenEst').textContent = Math.round((rlen + jlen + rulen) / 1.4).toLocaleString();
+    }
+
+    resumeInput.addEventListener('input', updateCharCount);
+    jdInput.addEventListener('input', updateCharCount);
+    rulesInput.addEventListener('input', updateCharCount);
+
+    // ========== Resume Scoring ==========
+    var isScoring = false;
+    var scoreResult = '';
+
+    async function startScoring() {
+        var resume = resumeInput.value.trim();
+        var jd = jdInput.value.trim();
+        var rules = rulesInput.value.trim();
+
+        if (!resume) { alert('请输入简历内容'); return; }
+        if (!jd) { alert('请输入职位描述'); return; }
+        if (!rules) { alert('请输入打分规则'); return; }
+
+        isScoring = true;
+        var btn = document.getElementById('scoreBtn');
+        btn.disabled = true;
+        btn.textContent = '打分中...';
+
+        var model = document.getElementById('modelName').value;
+        var temperature = parseFloat(document.getElementById('temperature').value);
+        var maxTokens = parseInt(document.getElementById('maxTokens').value);
+
+        // Build prompt
+        var prompt = '你是一位资深HR和技术面试官，拥有15年互联网行业人才评估经验。请严格按照打分规则对候选人进行客观、公正的评估。\n\n';
+        prompt += '=== 候选人简历 ===\n' + resume + '\n\n';
+        prompt += '=== 职位描述(JD) ===\n' + jd + '\n\n';
+        prompt += '=== 打分规则 ===\n' + rules;
+
+        // Show in result
+        document.getElementById('scoreEmpty').style.display = 'none';
+        var content = document.getElementById('scoreResultContent');
+        content.style.display = 'block';
+        content.textContent = '正在评估中，请稍候...（长文本处理中，预计10-30秒）\n\n输入约 ' + Math.round(prompt.length / 1.4).toLocaleString() + ' tokens';
+        document.getElementById('scoreMetrics').style.display = 'flex';
+        document.getElementById('scoreMetrics').innerHTML = '<div class="metric-item">开始时间: ' + new Date().toLocaleTimeString() + '</div>';
+
+        var startTime = Date.now();
+        var firstTokenTime = 0;
+        var outputText = '';
+        var outputTokenEst = 0;
+        var thinkState = { think: '', answer: '', inThink: false };
+
+        try {
+            var resp = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    prompt: prompt,
+                    stream: true,
+                    thinking: thinkingToggle.checked,
+                    options: { temperature: temperature, num_predict: maxTokens }
+                })
+            });
+
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+            var reader = resp.body.getReader();
+            var decoder = new TextDecoder();
+            content.innerHTML = '';
+
+            while (true) {
+                var result = await reader.read();
+                if (result.done) break;
+                var chunk = decoder.decode(result.value, { stream: true });
+                var lines = chunk.split('\n').filter(function(l) { return l.trim(); });
+                for (var i = 0; i < lines.length; i++) {
+                    try {
+                        var data = JSON.parse(lines[i]);
+                        if (data.response) {
+                            if (!firstTokenTime) firstTokenTime = Date.now();
+                            outputText += data.response;
+                            updateStreamingContent(content, data.response, thinkState);
+                            document.getElementById('scoreResultContainer').scrollTop = document.getElementById('scoreResultContainer').scrollHeight;
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            var endTime = Date.now();
+            var totalTime = ((endTime - startTime) / 1000).toFixed(1);
+            var ttft = firstTokenTime ? ((firstTokenTime - startTime) / 1000).toFixed(2) : 'N/A';
+            outputTokenEst = Math.round(outputText.length / 1.8);
+
+            scoreResult = outputText;
+            document.getElementById('outputTokenCount').textContent = outputTokenEst.toLocaleString();
+
+            document.getElementById('scoreMetrics').innerHTML =
+                '<div class="metric-item">总耗时: ' + totalTime + 's</div>' +
+                '<div class="metric-item">TTFT: ' + ttft + 's</div>' +
+                '<div class="metric-item">输出字符: ' + outputText.length.toLocaleString() + '</div>' +
+                '<div class="metric-item">估算输出 token: ~' + outputTokenEst.toLocaleString() + '</div>';
+
+        } catch(e) {
+            content.textContent = '请求失败: ' + e.message;
+            document.getElementById('scoreMetrics').innerHTML = '<div class="metric-item" style="color:#e53e3e">错误: ' + e.message + '</div>';
+        }
+
+        btn.disabled = false;
+        btn.textContent = '开始打分';
+        isScoring = false;
+    }
+
+    // ========== Test Case Loading ==========
+    var testCasesData = null;
+
+    async function loadTestCase() {
+        var selector = document.getElementById('testCaseSelector');
+        if (selector.style.display !== 'none') {
+            selector.style.display = 'none';
+            return;
+        }
+        selector.style.display = 'block';
+
+        if (testCasesData) {
+            renderTestCaseList();
+            return;
+        }
+
+        try {
+            var resp = await fetch('/api/test-cases');
+            testCasesData = await resp.json();
+            renderTestCaseList();
+        } catch(e) {
+            document.getElementById('testCaseList').innerHTML = '<span style="color:#e53e3e">加载失败: ' + e.message + '</span>';
+        }
+    }
+
+    function renderTestCaseList() {
+        var html = '';
+        (testCasesData.resumes || []).forEach(function(r, i) {
+            html += '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:all 0.2s" ';
+            html += 'onmouseenter="this.style.borderColor=\'var(--primary)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" ';
+            html += 'onclick="applyTestCase(' + i + ')">';
+            html += '<div style="font-weight:600;font-size:13px;margin-bottom:4px">简历 #' + (i+1) + '</div>';
+            html += '<div style="font-size:11px;color:var(--text-secondary)">' + r.char_count.toLocaleString() + ' 字符 ｜ 预览: ' + r.content.substring(0, 80).replace(/\n/g, ' ') + '...</div>';
+            html += '</div>';
+        });
+
+        html += '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary)">';
+        html += '点击上方简历卡片会自动填入：简历内容 + JD(' + (testCasesData.jd_char_count || 0).toLocaleString() + ' chars) + 打分规则(' + (testCasesData.rules_char_count || 0).toLocaleString() + ' chars)';
+        html += '</div>';
+
+        document.getElementById('testCaseList').innerHTML = html;
+    }
+
+    window.applyTestCase = function(idx) {
+        if (!testCasesData) return;
+        var r = testCasesData.resumes[idx];
+        resumeInput.value = r.content;
+        jdInput.value = testCasesData.jd || '';
+        rulesInput.value = testCasesData.rules || '';
+        updateCharCount();
+        document.getElementById('testCaseSelector').style.display = 'none';
+    };
+
+    function clearScoreInputs() {
+        resumeInput.value = '';
+        jdInput.value = '';
+        rulesInput.value = '';
+        updateCharCount();
+        document.getElementById('scoreResultContent').style.display = 'none';
+        document.getElementById('scoreEmpty').style.display = '';
+        document.getElementById('scoreMetrics').style.display = 'none';
+        document.getElementById('outputTokenCount').textContent = '0';
+        scoreResult = '';
+    }
+
+    function formatScoreResult() {
+        if (!scoreResult) return;
+        try {
+            // Try to extract JSON from the result
+            var jsonMatch = scoreResult.match(/```json\s*([\s\S]*?)```/) || scoreResult.match(/(\{[\s\S]*\})/);
+            var jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : scoreResult;
+            var parsed = JSON.parse(jsonStr);
+            document.getElementById('scoreResultContent').textContent = JSON.stringify(parsed, null, 2);
+            scoreResult = document.getElementById('scoreResultContent').textContent;
+        } catch(e) {
+            alert('无法格式化：结果不是有效的 JSON。已保留原始输出。');
+        }
+    }
+
+    function copyScoreResult() {
+        if (!scoreResult) return;
+        navigator.clipboard.writeText(scoreResult).then(function() {
+            alert('已复制到剪贴板');
+        }).catch(function() {
+            alert('复制失败，请手动选择文本');
+        });
+    }
+
+    // ========== Chat Mode ==========
+    var chatbox = document.getElementById('chatbox');
+    var chatInput = document.getElementById('chatInput');
+    var chatSendBtn = document.getElementById('chatSendBtn');
+    var chatMessages = [];
+
+    function addChatMsg(role, content) {
+        var div = document.createElement('div');
+        div.className = 'msg ' + role;
+        div.innerHTML = '<div class="role">' + (role === 'user' ? '你' : 'AI') + '</div><div>' + content + '</div>';
+        chatbox.appendChild(div);
+        chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function sendChat() {
+        var text = chatInput.value.trim();
+        if (!text) return;
+        chatInput.value = '';
+        chatSendBtn.disabled = true;
+        chatMessages.push({ role: 'user', content: text });
+        addChatMsg('user', text);
+
+        var assistantDiv = document.createElement('div');
+        assistantDiv.className = 'msg assistant';
+        assistantDiv.innerHTML = '<div class="role">AI</div><div class="thinking">思考中...</div>';
+        chatbox.appendChild(assistantDiv);
+        var contentDiv = assistantDiv.querySelector('div:last-child');
+
+        try {
+            var res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: chatMessages,
+                    thinking: thinkingToggle.checked,
+                    temperature: parseFloat(document.getElementById('temperature').value),
+                    max_tokens: parseInt(document.getElementById('maxTokens').value),
+                })
+            });
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var fullText = '';
+            var thinkState = { think: '', answer: '', inThink: false };
+            contentDiv.innerHTML = '';
+
+            while (true) {
+                var result = await reader.read();
+                if (result.done) break;
+                var chunk = decoder.decode(result.value, { stream: true });
+                var lines = chunk.split('\n').filter(function(l) { return l.trim(); });
+                for (var i = 0; i < lines.length; i++) {
+                    try {
+                        var data = JSON.parse(lines[i]);
+                        if (data.message && data.message.content) {
+                            fullText += data.message.content;
+                            updateStreamingContent(contentDiv, data.message.content, thinkState);
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                        }
+                    } catch(e) {}
+                }
+            }
+            chatMessages.push({ role: 'assistant', content: fullText });
+        } catch(e) {
+            contentDiv.textContent = '请求失败: ' + e.message;
+        }
+        chatSendBtn.disabled = false;
+        chatInput.focus();
+    }
+
+    chatSendBtn.onclick = sendChat;
+    chatInput.onkeydown = function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } };
+
+    // ========== Load Default Test Case (123.txt) ==========
+    async function loadDefaultTestCase() {
+        try {
+            var resp = await fetch('/api/default-test-case');
+            if (!resp.ok) return;
+            var tc = await resp.json();
+            if (tc.resume) resumeInput.value = tc.resume;
+            if (tc.jd) jdInput.value = tc.jd;
+            if (tc.rules) rulesInput.value = tc.rules;
+            updateCharCount();
+        } catch(e) {}
+    }
+
+    loadDefaultTestCase();
+    </script>
+</body>
+</html>
