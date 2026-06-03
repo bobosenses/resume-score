@@ -369,6 +369,67 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ========== 简历信息拼装（textSpan → description） ==========
+    if (req.method === 'POST' && req.url === '/api/assemble') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { skeleton, resume } = JSON.parse(body);
+                if (!skeleton || !resume) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: 'skeleton 和 resume 不能为空' }));
+                }
+
+                function assembleDescriptions(experiences) {
+                    if (!Array.isArray(experiences)) return;
+                    for (let i = 0; i < experiences.length; i++) {
+                        const exp = experiences[i];
+                        const span = exp.textSpan;
+                        if (!span || typeof span !== 'string') continue;
+
+                        let start = resume.indexOf(span);
+                        if (start === -1) {
+                            // 模糊匹配：取前10个字符
+                            const short = span.substring(0, 10);
+                            start = resume.indexOf(short);
+                        }
+
+                        if (start === -1) {
+                            exp.description = '';
+                            delete exp.textSpan;
+                            continue;
+                        }
+
+                        // 找下一段经历的起始位置作为结束边界
+                        let end = resume.length;
+                        if (i + 1 < experiences.length) {
+                            const nextSpan = experiences[i + 1].textSpan;
+                            if (nextSpan) {
+                                const nextStart = resume.indexOf(nextSpan, start + 1);
+                                if (nextStart !== -1) end = nextStart;
+                            }
+                        }
+
+                        exp.description = resume.substring(start, end).trim();
+                        delete exp.textSpan;
+                    }
+                }
+
+                // 拼装 workExperience 和 projectExperience
+                assembleDescriptions(skeleton.workExperience);
+                assembleDescriptions(skeleton.projectExperience);
+
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify(skeleton));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
     if (req.method === 'GET' && req.url === '/api/default-test-case') {
         try {
             const content = fs.readFileSync(DEFAULT_TEST_CASE_PATH, 'utf8');
