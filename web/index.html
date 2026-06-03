@@ -1225,13 +1225,22 @@
                     var score = r.rerank_score != null ? r.rerank_score : r.score;
                     var scorePercent = Math.round(score * 100);
                     var scoreColor = scorePercent >= 70 ? '#48bb78' : scorePercent >= 40 ? '#ed8936' : '#a0aec0';
+                    var confidence = r.llm_confidence || '';
+                    var confColor = confidence === 'high' ? '#48bb78' : confidence === 'medium' ? '#ed8936' : '#a0aec0';
+                    var confLabel = confidence === 'high' ? '高置信' : confidence === 'medium' ? '中置信' : confidence === 'low' ? '低置信' : '';
 
                     html += '<div class="func-card">';
                     html += '<div class="func-card-header">';
                     html += '<div class="func-card-rank">' + (i + 1) + '</div>';
-                    html += '<div class="func-card-score" style="color:' + scoreColor + '">相关度 ' + scorePercent + '%</div>';
+                    html += '<div style="display:flex;gap:8px;align-items:center">';
+                    if (confLabel) html += '<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + confColor + '15;color:' + confColor + ';font-weight:600">' + confLabel + '</span>';
+                    html += '<div class="func-card-score" style="color:' + scoreColor + '">向量 ' + scorePercent + '%</div>';
+                    html += '</div>';
                     html += '</div>';
                     html += '<div class="func-card-path">' + escapeHtml(m.function_path || r.document) + '</div>';
+                    if (r.llm_reason) {
+                        html += '<div style="margin-top:6px;font-size:12px;color:var(--primary);background:rgba(102,126,234,0.06);padding:6px 10px;border-radius:6px">💡 ' + escapeHtml(r.llm_reason) + '</div>';
+                    }
                     html += '<div class="func-card-meta">';
                     if (m.industry) html += '<span>🏭 ' + escapeHtml(m.industry) + '</span>';
                     if (m.first_function) html += '<span>📁 ' + escapeHtml(m.first_function) + '</span>';
@@ -1239,7 +1248,7 @@
                     if (m.third_function) html += '<span>📄 ' + escapeHtml(m.third_function) + '</span>';
                     html += '</div>';
                     if (m.keywords) {
-                        html += '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary)">🏷️ ' + escapeHtml(m.keywords.substring(0, 150)) + '</div>';
+                        html += '<div style="margin-top:6px;font-size:11px;color:var(--text-secondary)">🏷️ ' + escapeHtml(m.keywords.substring(0, 150)) + '</div>';
                     }
                     html += '</div>';
                 });

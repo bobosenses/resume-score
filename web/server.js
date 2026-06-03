@@ -2,7 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const MODEL = process.env.VLLM_MODEL || 'Qwen/Qwen3-8B-FP8';
+const MODEL = process.env.VLLM_MODEL || '/root/vLLM/models/Qwen3-8B-FP8';
 const VLLM_BASE = process.env.VLLM_BASE || 'http://127.0.0.1:8000';
 const PORT = process.env.PORT || 3000;
 const INDEX_PATH = path.join(__dirname, 'index.html');
@@ -431,7 +431,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // ========== 职能分析（查询 ChromaDB function_labels） ==========
+    // ========== 职能分析（ChromaDB召回 + LLM判断） ==========
     if (req.method === 'POST' && req.url === '/api/function-search') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -446,8 +446,6 @@ const server = http.createServer((req, res) => {
                 // 从简历原文中提取高密度语义段落作为搜索query
                 function extractSearchQuery(text) {
                     var parts = [];
-
-                    // 提取工作经历中的「公司名（时间）职位」
                     var workMatches = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）([一-龥\/·（）a-zA-Z\s]+)/g);
                     if (workMatches) {
                         var stopWords = ['下属人数', '职责业绩', '所在部门', '工作地点', '汇报对象', '薪资', '附件简历', '对方已上传'];
@@ -455,7 +453,6 @@ const server = http.createServer((req, res) => {
                             var pm = m.match(/）([一-龥\/·（）a-zA-Z\s]+)/);
                             if (!pm) return '';
                             var pos = pm[1].trim();
-                            // 截断停止词
                             for (var w = 0; w < stopWords.length; w++) {
                                 var idx = pos.indexOf(stopWords[w]);
                                 if (idx > 0) pos = pos.substring(0, idx);
@@ -466,15 +463,10 @@ const server = http.createServer((req, res) => {
                         });
                         if (positions.length) parts.push(positions.join(' '));
                     }
-
-                    // 提取求职意向中的目标职位
                     var intentMatch = text.match(/求职意向\s*([一-龥a-zA-Z]{2,30})/);
                     if (intentMatch) parts.push(intentMatch[1].trim());
-
-                    // 提取自我评价段落
                     var evalMatch = text.match(/自我评价[：:]*\s*([\s\S]{10,200}?)(?=\[|【|$)/);
                     if (!evalMatch) {
-                        // 无标签：匹配以"擅长"/"具备"/"熟悉"开头的短句（到句号/分号结束）
                         var sentences = [];
                         var re = /(?:擅长|具备|熟悉|精通|工作认真|拥有|善于)[一-龥a-zA-Z，,。；;：:\s]{8,80}[。；;]/g;
                         var m;
@@ -485,19 +477,34 @@ const server = http.createServer((req, res) => {
                         if (sentences.length) evalMatch = [null, sentences.join(' ')];
                     }
                     if (evalMatch) parts.push(evalMatch[1].trim().substring(0, 150));
-
                     if (parts.length === 0) return text.substring(0, 500);
                     return parts.join(' ');
                 }
 
-                var searchQuery = extractSearchQuery(query);
+                // 提取LLM用的简历摘要
+                function extractResumeSummary(text) {
+                    var summary = [];
+                    var basic = text.match(/(?:\[基本信息\]|##\s*基本信息)[\s\S]{10,200}?(?=\[|##)/);
+                    if (basic) summary.push(basic[0].substring(0, 150).replace(/\n/g, ' '));
+                    var intent = text.match(/求职意向[\s\S]{5,80}?(?=\[|##|\n\n)/);
+                    if (intent) summary.push(intent[0].replace(/\n/g, ' '));
+                    var workLines = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）[一-龥\/·（）a-zA-Z\s]+/g);
+                    if (workLines) summary.push('工作经历: ' + workLines.slice(0, 8).join('; '));
+                    var evalSec = text.match(/自我评价[：:]*\s*([\s\S]{10,200}?)(?=\[|【|$)/);
+                    if (evalSec) summary.push('自我评价: ' + evalSec[1].trim().substring(0, 150));
+                    return summary.join('\n').substring(0, 600);
+                }
 
+                var searchQuery = extractSearchQuery(query);
+                var resumeSummary = extractResumeSummary(query);
+
+                // Step 1: ChromaDB 召回 Top 20
                 const ragPayload = JSON.stringify({
                     collection: 'function_labels',
                     query: searchQuery,
                     top_k: 20,
                     rerank: true,
-                    rerank_top_k: 5,
+                    rerank_top_k: 20,
                 });
 
                 const ragUrl = new URL(RAG_BASE + '/search');
@@ -513,21 +520,121 @@ const server = http.createServer((req, res) => {
                     ragRes.on('end', () => {
                         try {
                             const ragData = JSON.parse(ragBody);
-                            ragData.search_query = searchQuery; // 返回提取的关键词供调试
-                            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                            res.end(JSON.stringify(ragData));
+                            var candidates = ragData.results || [];
+
+                            if (candidates.length === 0) {
+                                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                                return res.end(JSON.stringify({ query, search_query: searchQuery, results: [], total: 0, elapsed_ms: ragData.elapsed_ms || 0 }));
+                            }
+
+                            // Step 2: LLM 从候选中选 Top 5
+                            var candidateList = candidates.map(function(c, i) {
+                                var m = c.metadata || {};
+                                return (i+1) + '. ' + (m.function_path || c.document);
+                            }).join('\n');
+
+                            var llmPrompt = '你是职能匹配专家。根据简历信息，从以下候选职能中选出最匹配的Top 5。\n\n';
+                            llmPrompt += '【简历信息】\n' + resumeSummary + '\n\n';
+                            llmPrompt += '【候选职能列表】\n' + candidateList + '\n\n';
+                            llmPrompt += '严格按以下JSON格式输出，不要解释：\n';
+                            llmPrompt += '{"matches":[{"rank":1,"candidate_index":1,"confidence":"high","reason":"一句话理由"},...]}';
+
+                            var llmPayload = JSON.stringify({
+                                model: MODEL,
+                                messages: [{ role: 'user', content: llmPrompt }],
+                                stream: false,
+                                max_tokens: 500,
+                                temperature: 0.1,
+                                chat_template_kwargs: { enable_thinking: false },
+                            });
+
+                            var llmUrl = new URL(VLLM_BASE + '/v1/chat/completions');
+                            var llmReq = http.request({
+                                hostname: llmUrl.hostname,
+                                port: llmUrl.port,
+                                path: llmUrl.pathname,
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(llmPayload) }
+                            }, (llmRes) => {
+                                let llmBody = '';
+                                llmRes.on('data', chunk => llmBody += chunk);
+                                llmRes.on('end', () => {
+                                    try {
+                                        var llmData = JSON.parse(llmBody);
+                                        var llmContent = (llmData.choices && llmData.choices[0] && llmData.choices[0].message && llmData.choices[0].message.content) || '';
+
+                                        var llmMatches = [];
+                                        try {
+                                            var jsonMatch = llmContent.match(/\{[\s\S]*\}/);
+                                            if (jsonMatch) {
+                                                var parsed = JSON.parse(jsonMatch[0]);
+                                                llmMatches = parsed.matches || [];
+                                            }
+                                        } catch(e) {}
+
+                                        var finalResults = [];
+                                        var usedIndices = new Set();
+                                        llmMatches.forEach(function(match) {
+                                            var idx = (match.candidate_index || match.rank || 1) - 1;
+                                            if (idx >= 0 && idx < candidates.length && !usedIndices.has(idx)) {
+                                                usedIndices.add(idx);
+                                                var c = candidates[idx];
+                                                finalResults.push({
+                                                    id: c.id, document: c.document, metadata: c.metadata,
+                                                    score: c.score, rerank_score: c.rerank_score,
+                                                    llm_rank: match.rank || finalResults.length + 1,
+                                                    llm_confidence: match.confidence || 'medium',
+                                                    llm_reason: match.reason || '',
+                                                });
+                                            }
+                                        });
+                                        for (var i = 0; i < candidates.length && finalResults.length < 5; i++) {
+                                            if (!usedIndices.has(i)) {
+                                                var c = candidates[i];
+                                                finalResults.push({
+                                                    id: c.id, document: c.document, metadata: c.metadata,
+                                                    score: c.score, rerank_score: c.rerank_score,
+                                                    llm_rank: finalResults.length + 1,
+                                                    llm_confidence: 'low', llm_reason: '向量检索补充',
+                                                });
+                                            }
+                                        }
+
+                                        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                                        res.end(JSON.stringify({
+                                            query, search_query: searchQuery,
+                                            results: finalResults.slice(0, 5),
+                                            total: finalResults.length,
+                                            elapsed_ms: ragData.elapsed_ms || 0,
+                                            llm_raw: llmContent,
+                                        }));
+                                    } catch(e) {
+                                        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                                        ragData.search_query = searchQuery;
+                                        ragData.results = candidates.slice(0, 5);
+                                        res.end(JSON.stringify(ragData));
+                                    }
+                                });
+                            });
+                            llmReq.on('error', () => {
+                                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                                ragData.search_query = searchQuery;
+                                ragData.results = candidates.slice(0, 5);
+                                res.end(JSON.stringify(ragData));
+                            });
+                            llmReq.write(llmPayload);
+                            llmReq.end();
+
                         } catch (e) {
                             res.writeHead(500, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ error: 'RAG 响应解析失败' }));
                         }
                     });
                 });
-
                 ragReq.on('error', (e) => {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'RAG 服务不可用: ' + e.message }));
                 });
-
                 ragReq.write(ragPayload);
                 ragReq.end();
             } catch (e) {
