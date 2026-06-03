@@ -363,6 +363,29 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (req.method === 'POST' && req.url === '/api/parse') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { resume, rules, model, thinking, temperature, max_tokens } = JSON.parse(body);
+                if (!resume || !rules) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: '简历内容和解析规则不能为空' }));
+                }
+                const messages = [
+                    { role: 'system', content: '你是一位专业的简历解析专家，擅长从简历中提取结构化信息。请严格按照用户提供的解析规则对简历进行解析。' },
+                    { role: 'user', content: '=== 候选人简历 ===\n' + resume + '\n\n=== 解析规则 ===\n' + rules }
+                ];
+                streamChatCompletion(messages, { model, thinking, temperature, max_tokens }, res);
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
     if (req.method === 'POST' && req.url === '/api/chat') {
         let body = '';
         req.on('data', chunk => body += chunk);

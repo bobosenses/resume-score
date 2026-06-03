@@ -126,7 +126,7 @@
         .typing { color: var(--primary); letter-spacing: 2px; }
 
         /* Scoring Panel */
-        #scoringPanel {
+        #scoringPanel, #parsePanel {
             flex: 1; display: flex; gap: 20px; overflow: hidden;
         }
         .input-section {
@@ -342,6 +342,7 @@
     <!-- Tabs -->
     <div class="tab-nav">
         <button class="tab-btn" onclick="switchTab('score')">简历打分</button>
+        <button class="tab-btn" onclick="switchTab('parse')">简历解析</button>
         <button class="tab-btn" onclick="switchTab('chat')">AI Chat</button>
         <button class="tab-btn active" onclick="switchTab('settings')">⚙️ 系统设置</button>
     </div>
@@ -406,6 +407,51 @@
                     <pre class="result-content" id="scoreResultContent" style="display:none"></pre>
                 </div>
                 <div class="metrics-bar" id="scoreMetrics" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- Resume Parse Panel -->
+        <div id="parsePanel" style="display:none">
+            <!-- Left: 2 Input Blocks -->
+            <div class="input-section">
+                <div class="input-block">
+                    <h3><span class="badge badge-resume">简历</span> 候选人简历内容</h3>
+                    <textarea id="parseResumeInput" rows="16" placeholder="在此粘贴候选人简历...&#10;支持从PDF/Word复制文本"></textarea>
+                    <div class="hint">
+                        <span id="parseResumeCharCount">0 字符</span>
+                        <span id="parseResumeTokenEst">~0 tokens</span>
+                    </div>
+                </div>
+
+                <div class="input-block">
+                    <h3><span class="badge badge-rules">规则</span> 解析规则</h3>
+                    <textarea id="parseRulesInput" rows="10" placeholder="在此定义解析规则...&#10;例如：提取姓名、学历、工作经历、技能等字段，以JSON格式输出"></textarea>
+                    <div class="hint">
+                        <span id="parseRulesCharCount">0 字符</span>
+                        <span id="parseRulesTokenEst">~0 tokens</span>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn-primary" id="parseBtn" onclick="startParse()">开始解析</button>
+                    <button class="btn-secondary" onclick="clearParseInputs()">清空</button>
+                </div>
+            </div>
+
+            <!-- Right: Result -->
+            <div class="result-section">
+                <div class="result-header">
+                    <h3>解析结果</h3>
+                    <div class="actions">
+                        <button class="btn-small" onclick="formatParseResult()">格式化</button>
+                        <button class="btn-small" onclick="copyParseResult()">复制</button>
+                    </div>
+                </div>
+                <div class="result-container" id="parseResultContainer">
+                    <div class="empty" id="parseEmpty">点击「开始解析」查看 AI 解析结果</div>
+                    <pre class="result-content" id="parseResultContent" style="display:none"></pre>
+                </div>
+                <div class="metrics-bar" id="parseMetrics" style="display:none"></div>
             </div>
         </div>
 
@@ -599,9 +645,15 @@
     // ========== Tab Switching ==========
     window.switchTab = function(tab) {
         document.querySelectorAll('.tab-btn').forEach(function(b, i) {
-            b.classList.toggle('active', (i === 0 && tab === 'score') || (i === 1 && tab === 'chat') || (i === 2 && tab === 'settings'));
+            b.classList.toggle('active',
+                (i === 0 && tab === 'score') ||
+                (i === 1 && tab === 'parse') ||
+                (i === 2 && tab === 'chat') ||
+                (i === 3 && tab === 'settings')
+            );
         });
         document.getElementById('scoringPanel').style.display = tab === 'score' ? 'flex' : 'none';
+        document.getElementById('parsePanel').style.display = tab === 'parse' ? 'flex' : 'none';
         document.getElementById('chatPanel').style.display = tab === 'chat' ? 'flex' : 'none';
         document.getElementById('settingsPanel').style.display = tab === 'settings' ? 'flex' : 'none';
         // 隐藏/显示底部配置栏
@@ -1060,6 +1112,145 @@
     }
 
     loadDefaultTestCase();
+
+    // ========== Resume Parsing ==========
+    var parseResumeInput = document.getElementById('parseResumeInput');
+    var parseRulesInput = document.getElementById('parseRulesInput');
+    var isParsing = false;
+    var parseResult = '';
+
+    function updateParseCharCount() {
+        var rlen = parseResumeInput.value.length;
+        var rulen = parseRulesInput.value.length;
+        document.getElementById('parseResumeCharCount').textContent = rlen.toLocaleString() + ' 字符';
+        document.getElementById('parseRulesCharCount').textContent = rulen.toLocaleString() + ' 字符';
+        document.getElementById('parseResumeTokenEst').textContent = '~' + Math.round(rlen / 1.4).toLocaleString() + ' tokens';
+        document.getElementById('parseRulesTokenEst').textContent = '~' + Math.round(rulen / 1.4).toLocaleString() + ' tokens';
+    }
+
+    parseResumeInput.addEventListener('input', updateParseCharCount);
+    parseRulesInput.addEventListener('input', updateParseCharCount);
+
+    async function startParse() {
+        var resume = parseResumeInput.value.trim();
+        var rules = parseRulesInput.value.trim();
+
+        if (!resume) { alert('请输入简历内容'); return; }
+        if (!rules) { alert('请输入解析规则'); return; }
+
+        isParsing = true;
+        var btn = document.getElementById('parseBtn');
+        btn.disabled = true;
+        btn.textContent = '解析中...';
+
+        var model = document.getElementById('modelName').value;
+        var temperature = parseFloat(document.getElementById('temperature').value);
+        var maxTokens = parseInt(document.getElementById('maxTokens').value);
+
+        document.getElementById('parseEmpty').style.display = 'none';
+        var content = document.getElementById('parseResultContent');
+        content.style.display = 'block';
+        content.textContent = '正在解析中，请稍候...';
+        document.getElementById('parseMetrics').style.display = 'flex';
+        document.getElementById('parseMetrics').innerHTML = '<div class="metric-item">开始时间: ' + new Date().toLocaleTimeString() + '</div>';
+
+        var startTime = Date.now();
+        var firstTokenTime = 0;
+        var outputText = '';
+        var thinkState = { think: '', answer: '', inThink: false };
+
+        try {
+            var resp = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    resume: resume,
+                    rules: rules,
+                    model: model,
+                    thinking: thinkingToggle.checked,
+                    temperature: temperature,
+                    max_tokens: maxTokens
+                })
+            });
+
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+            var reader = resp.body.getReader();
+            var decoder = new TextDecoder();
+            content.innerHTML = '';
+
+            while (true) {
+                var result = await reader.read();
+                if (result.done) break;
+                var chunk = decoder.decode(result.value, { stream: true });
+                var lines = chunk.split('\n').filter(function(l) { return l.trim(); });
+                for (var i = 0; i < lines.length; i++) {
+                    try {
+                        var data = JSON.parse(lines[i]);
+                        if (data.response) {
+                            if (!firstTokenTime) firstTokenTime = Date.now();
+                            outputText += data.response;
+                            updateStreamingContent(content, data.response, thinkState);
+                            document.getElementById('parseResultContainer').scrollTop = document.getElementById('parseResultContainer').scrollHeight;
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            var endTime = Date.now();
+            var totalTime = ((endTime - startTime) / 1000).toFixed(1);
+            var ttft = firstTokenTime ? ((firstTokenTime - startTime) / 1000).toFixed(2) : 'N/A';
+            var outputTokenEst = Math.round(outputText.length / 1.8);
+
+            parseResult = outputText;
+
+            document.getElementById('parseMetrics').innerHTML =
+                '<div class="metric-item">总耗时: ' + totalTime + 's</div>' +
+                '<div class="metric-item">TTFT: ' + ttft + 's</div>' +
+                '<div class="metric-item">输出字符: ' + outputText.length.toLocaleString() + '</div>' +
+                '<div class="metric-item">估算输出 token: ~' + outputTokenEst.toLocaleString() + '</div>';
+
+        } catch(e) {
+            content.textContent = '请求失败: ' + e.message;
+            document.getElementById('parseMetrics').innerHTML = '<div class="metric-item" style="color:#e53e3e">错误: ' + e.message + '</div>';
+        }
+
+        btn.disabled = false;
+        btn.textContent = '开始解析';
+        isParsing = false;
+    }
+
+    function clearParseInputs() {
+        parseResumeInput.value = '';
+        parseRulesInput.value = '';
+        updateParseCharCount();
+        document.getElementById('parseResultContent').style.display = 'none';
+        document.getElementById('parseEmpty').style.display = '';
+        document.getElementById('parseMetrics').style.display = 'none';
+        parseResult = '';
+    }
+
+    function formatParseResult() {
+        if (!parseResult) return;
+        try {
+            var jsonMatch = parseResult.match(/```json\s*([\s\S]*?)```/) || parseResult.match(/(\{[\s\S]*\})/);
+            var jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : parseResult;
+            var parsed = JSON.parse(jsonStr);
+            document.getElementById('parseResultContent').textContent = JSON.stringify(parsed, null, 2);
+            parseResult = document.getElementById('parseResultContent').textContent;
+        } catch(e) {
+            alert('无法格式化：结果不是有效的 JSON。已保留原始输出。');
+        }
+    }
+
+    function copyParseResult() {
+        if (!parseResult) return;
+        navigator.clipboard.writeText(parseResult).then(function() {
+            alert('已复制到剪贴板');
+        }).catch(function() {
+            alert('复制失败，请手动选择文本');
+        });
+    }
     </script>
 </body>
 </html>
