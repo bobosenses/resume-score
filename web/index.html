@@ -126,7 +126,7 @@
         .typing { color: var(--primary); letter-spacing: 2px; }
 
         /* Scoring Panel */
-        #scoringPanel, #parsePanel {
+        #scoringPanel, #parsePanel, #functionPanel {
             flex: 1; display: flex; gap: 20px; overflow: hidden;
         }
         .input-section {
@@ -185,6 +185,33 @@
             font-size: 12px; color: var(--text-secondary);
         }
         .metric-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+
+        /* Function Result Cards */
+        .func-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.2s;
+        }
+        .func-card:hover { border-color: var(--primary); }
+        .func-card-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+        }
+        .func-card-rank {
+            font-size: 11px; font-weight: 700; color: #fff; background: var(--gradient);
+            border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+        }
+        .func-card-score {
+            font-size: 12px; font-weight: 600; color: var(--primary);
+            background: rgba(102,126,234,0.1); padding: 2px 10px; border-radius: 12px;
+        }
+        .func-card-path {
+            font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;
+        }
+        .func-card-meta {
+            font-size: 12px; color: var(--text-secondary); display: flex; gap: 12px; flex-wrap: wrap;
+        }
+        .func-card-meta span {
+            background: var(--bg); padding: 2px 8px; border-radius: 4px;
+        }
 
         /* Thinking Toggle Switch */
         .thinking-toggle { display: flex; align-items: center; gap: 8px; }
@@ -343,6 +370,7 @@
     <div class="tab-nav">
         <button class="tab-btn" onclick="switchTab('score')">简历打分</button>
         <button class="tab-btn" onclick="switchTab('parse')">简历解析</button>
+        <button class="tab-btn" onclick="switchTab('function')">职能分析</button>
         <button class="tab-btn" onclick="switchTab('chat')">AI Chat</button>
         <button class="tab-btn active" onclick="switchTab('settings')">⚙️ 系统设置</button>
     </div>
@@ -460,6 +488,37 @@
                     <pre class="result-content" id="parseResultContent" style="display:none"></pre>
                 </div>
                 <div class="metrics-bar" id="parseMetrics" style="display:none"></div>
+            </div>
+        </div>
+
+        <!-- Function Analysis Panel -->
+        <div id="functionPanel" style="display:none">
+            <div class="input-section">
+                <div class="input-block">
+                    <h3><span class="badge badge-resume">简历</span> 简历原文</h3>
+                    <textarea id="functionResumeInput" rows="20" placeholder="在此粘贴简历原文，系统会自动提取职能关键词并查询职能库..."></textarea>
+                    <div class="hint">
+                        <span id="functionResumeCharCount">0 字符</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn-primary" id="functionBtn" onclick="startFunctionSearch()">🔍 职能分析</button>
+                    <button class="btn-secondary" onclick="clearFunctionInputs()">清空</button>
+                </div>
+            </div>
+
+            <div class="result-section">
+                <div class="result-header">
+                    <h3>匹配结果 (Top 5)</h3>
+                    <div class="actions">
+                        <button class="btn-small" onclick="copyFunctionResult()">复制</button>
+                    </div>
+                </div>
+                <div class="result-container" id="functionResultContainer">
+                    <div class="empty" id="functionEmpty">粘贴简历后点击「职能分析」查看匹配结果</div>
+                    <div id="functionResultContent" style="display:none"></div>
+                </div>
+                <div class="metrics-bar" id="functionMetrics" style="display:none"></div>
             </div>
         </div>
 
@@ -656,16 +715,18 @@
             b.classList.toggle('active',
                 (i === 0 && tab === 'score') ||
                 (i === 1 && tab === 'parse') ||
-                (i === 2 && tab === 'chat') ||
-                (i === 3 && tab === 'settings')
+                (i === 2 && tab === 'function') ||
+                (i === 3 && tab === 'chat') ||
+                (i === 4 && tab === 'settings')
             );
         });
         document.getElementById('scoringPanel').style.display = tab === 'score' ? 'flex' : 'none';
         document.getElementById('parsePanel').style.display = tab === 'parse' ? 'flex' : 'none';
+        document.getElementById('functionPanel').style.display = tab === 'function' ? 'flex' : 'none';
         document.getElementById('chatPanel').style.display = tab === 'chat' ? 'flex' : 'none';
         document.getElementById('settingsPanel').style.display = tab === 'settings' ? 'flex' : 'none';
         // 隐藏/显示底部配置栏
-        document.querySelector('.config-bar').style.display = tab === 'settings' ? 'none' : 'flex';
+        document.querySelector('.config-bar').style.display = (tab === 'settings' || tab === 'function') ? 'none' : 'flex';
     };
 
     // ========== Settings Persistence (localStorage) ==========
@@ -1117,6 +1178,111 @@
             if (tc.rules) rulesInput.value = tc.rules;
             updateCharCount();
         } catch(e) {}
+    }
+
+    // ========== Function Analysis ==========
+    var functionResumeInput = document.getElementById('functionResumeInput');
+
+    functionResumeInput.addEventListener('input', function() {
+        document.getElementById('functionResumeCharCount').textContent = functionResumeInput.value.length.toLocaleString() + ' 字符';
+    });
+
+    async function startFunctionSearch() {
+        var resume = functionResumeInput.value.trim();
+        if (!resume) { alert('请输入简历内容'); return; }
+
+        var btn = document.getElementById('functionBtn');
+        btn.disabled = true;
+        btn.textContent = '分析中...';
+
+        document.getElementById('functionEmpty').style.display = 'none';
+        document.getElementById('functionResultContent').style.display = 'block';
+        document.getElementById('functionResultContent').innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding-top:40px">正在查询职能库...</div>';
+        document.getElementById('functionMetrics').style.display = 'flex';
+        document.getElementById('functionMetrics').innerHTML = '<div class="metric-item">开始时间: ' + new Date().toLocaleTimeString() + '</div>';
+
+        var startTime = Date.now();
+
+        try {
+            var resp = await fetch('/api/function-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: resume })
+            });
+
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            var data = await resp.json();
+
+            var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            var results = data.results || [];
+
+            if (results.length === 0) {
+                document.getElementById('functionResultContent').innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding-top:40px">未找到匹配的职能记录</div>';
+            } else {
+                var html = '';
+                results.forEach(function(r, i) {
+                    var m = r.metadata || {};
+                    var score = r.rerank_score != null ? r.rerank_score : r.score;
+                    var scorePercent = Math.round(score * 100);
+                    var scoreColor = scorePercent >= 70 ? '#48bb78' : scorePercent >= 40 ? '#ed8936' : '#a0aec0';
+
+                    html += '<div class="func-card">';
+                    html += '<div class="func-card-header">';
+                    html += '<div class="func-card-rank">' + (i + 1) + '</div>';
+                    html += '<div class="func-card-score" style="color:' + scoreColor + '">相关度 ' + scorePercent + '%</div>';
+                    html += '</div>';
+                    html += '<div class="func-card-path">' + escapeHtml(m.function_path || r.document) + '</div>';
+                    html += '<div class="func-card-meta">';
+                    if (m.industry) html += '<span>🏭 ' + escapeHtml(m.industry) + '</span>';
+                    if (m.first_function) html += '<span>📁 ' + escapeHtml(m.first_function) + '</span>';
+                    if (m.second_function) html += '<span>📂 ' + escapeHtml(m.second_function) + '</span>';
+                    if (m.third_function) html += '<span>📄 ' + escapeHtml(m.third_function) + '</span>';
+                    html += '</div>';
+                    if (m.keywords) {
+                        html += '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary)">🏷️ ' + escapeHtml(m.keywords.substring(0, 150)) + '</div>';
+                    }
+                    html += '</div>';
+                });
+                document.getElementById('functionResultContent').innerHTML = html;
+            }
+
+            document.getElementById('functionMetrics').innerHTML =
+                '<div class="metric-item">耗时: ' + elapsed + 's</div>' +
+                '<div class="metric-item">匹配: ' + results.length + ' 条</div>' +
+                '<div class="metric-item">检索耗时: ' + (data.elapsed_ms || 0).toFixed(0) + 'ms</div>';
+
+            // 保存结果供复制
+            window._functionResult = results;
+
+        } catch(e) {
+            document.getElementById('functionResultContent').innerHTML = '<div style="color:#e53e3e;text-align:center;padding-top:40px">查询失败: ' + e.message + '</div>';
+            document.getElementById('functionMetrics').innerHTML = '<div class="metric-item" style="color:#e53e3e">错误: ' + e.message + '</div>';
+        }
+
+        btn.disabled = false;
+        btn.textContent = '🔍 职能分析';
+    }
+
+    function clearFunctionInputs() {
+        functionResumeInput.value = '';
+        document.getElementById('functionResumeCharCount').textContent = '0 字符';
+        document.getElementById('functionResultContent').style.display = 'none';
+        document.getElementById('functionEmpty').style.display = '';
+        document.getElementById('functionMetrics').style.display = 'none';
+    }
+
+    function copyFunctionResult() {
+        if (!window._functionResult || !window._functionResult.length) return;
+        var text = window._functionResult.map(function(r, i) {
+            var m = r.metadata || {};
+            var score = r.rerank_score != null ? r.rerank_score : r.score;
+            return (i+1) + '. [' + (m.industry || '') + '] ' + (m.function_path || '') + ' (相关度: ' + Math.round(score*100) + '%)';
+        }).join('\n');
+        navigator.clipboard.writeText(text).then(function() {
+            alert('已复制到剪贴板');
+        }).catch(function() {
+            alert('复制失败');
+        });
     }
 
     loadDefaultTestCase();

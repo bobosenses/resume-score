@@ -13,6 +13,7 @@ const DEFAULT_TEST_CASE_PATH = path.join(__dirname, '123.txt');
 const SCORING_RULES_PATH = path.join(__dirname, '..', 'config', 'scoring_rules.json');
 const PARSE_RULES_PATH = path.join(__dirname, '..', 'config', 'parse_rules.json');
 const PROXY_BASE = process.env.PROXY_BASE || 'http://127.0.0.1:8000';
+const RAG_BASE = process.env.RAG_BASE || 'http://127.0.0.1:8002';
 
 // ========== Helper: call vLLM chat/completions and stream back Ollama-style generate chunks ==========
 function streamChatCompletion(messages, options, res) {
@@ -422,6 +423,63 @@ const server = http.createServer((req, res) => {
 
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify(skeleton));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // ========== 职能分析（查询 ChromaDB function_labels） ==========
+    if (req.method === 'POST' && req.url === '/api/function-search') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { query } = JSON.parse(body);
+                if (!query) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: 'query 不能为空' }));
+                }
+
+                const ragPayload = JSON.stringify({
+                    collection: 'function_labels',
+                    query: query,
+                    top_k: 20,
+                    rerank: true,
+                    rerank_top_k: 5,
+                });
+
+                const ragUrl = new URL(RAG_BASE + '/search');
+                const ragReq = http.request({
+                    hostname: ragUrl.hostname,
+                    port: ragUrl.port,
+                    path: ragUrl.pathname,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(ragPayload) }
+                }, (ragRes) => {
+                    let ragBody = '';
+                    ragRes.on('data', chunk => ragBody += chunk);
+                    ragRes.on('end', () => {
+                        try {
+                            const ragData = JSON.parse(ragBody);
+                            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                            res.end(JSON.stringify(ragData));
+                        } catch (e) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: 'RAG 响应解析失败' }));
+                        }
+                    });
+                });
+
+                ragReq.on('error', (e) => {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'RAG 服务不可用: ' + e.message }));
+                });
+
+                ragReq.write(ragPayload);
+                ragReq.end();
             } catch (e) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
