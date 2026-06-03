@@ -448,11 +448,19 @@ const server = http.createServer((req, res) => {
                     var parts = [];
 
                     // 提取工作经历中的「公司名（时间）职位」
-                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)]+（\d{4}\.\d{2}[^）]*）([一-龥\/·]+)/g);
+                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）([一-龥\/·（）]+)/g);
                     if (workMatches) {
+                        var stopWords = ['下属人数', '职责业绩', '所在部门', '工作地点', '汇报对象', '薪资'];
                         var positions = workMatches.map(function(m) {
-                            var pm = m.match(/）([一-龥\/·]+)/);
-                            return pm ? pm[1].trim() : '';
+                            var pm = m.match(/）([一-龥\/·（）]+)/);
+                            if (!pm) return '';
+                            var pos = pm[1].trim();
+                            // 截断停止词
+                            for (var w = 0; w < stopWords.length; w++) {
+                                var idx = pos.indexOf(stopWords[w]);
+                                if (idx > 0) pos = pos.substring(0, idx);
+                            }
+                            return pos;
                         }).filter(Boolean);
                         if (positions.length) parts.push(positions.join(' '));
                     }
