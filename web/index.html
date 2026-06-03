@@ -440,15 +440,9 @@
                     <button class="btn-secondary" onclick="clearParseInputs()">清空</button>
                 </div>
 
-                <!-- 拼装结果区域（解析完成后显示） -->
-                <div id="assembleSection" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--card-bg)">
-                    <h3 style="font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-                        <span class="badge badge-resume">完成</span> 骨架解析已完成，点击填充完整信息
-                    </h3>
-                    <div style="display:flex;gap:10px;align-items:center">
-                        <button class="btn-primary" id="assembleBtn" onclick="assembleDescriptions()">📋 填充信息（拼装 description）</button>
-                        <span id="assembleStatus" style="font-size:12px;color:var(--text-secondary)"></span>
-                    </div>
+                <!-- 拼装状态提示 -->
+                <div id="assembleSection" style="display:none;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--card-bg)">
+                    <span id="assembleStatus" style="font-size:12px;color:var(--text-secondary)">⏳ 正在拼装 description...</span>
                 </div>
             </div>
 
@@ -1224,9 +1218,8 @@
                 '<div class="metric-item">输出字符: ' + outputText.length.toLocaleString() + '</div>' +
                 '<div class="metric-item">估算输出 token: ~' + outputTokenEst.toLocaleString() + '</div>';
 
-            // 解析完成后显示填充按钮
-            document.getElementById('assembleSection').style.display = 'block';
-            document.getElementById('assembleStatus').textContent = '';
+            // 解析完成后自动填充 description
+            await assembleDescriptions();
 
         } catch(e) {
             content.textContent = '请求失败: ' + e.message;
@@ -1271,25 +1264,22 @@
         });
     }
 
-    // ========== 填充信息（拼装 description） ==========
+    // ========== 自动拼装 description ==========
     async function assembleDescriptions() {
-        if (!parseResult) { alert('请先完成解析'); return; }
+        if (!parseResult) return;
 
-        var btn = document.getElementById('assembleBtn');
         var statusEl = document.getElementById('assembleStatus');
-        btn.disabled = true;
-        btn.textContent = '拼装中...';
-        statusEl.textContent = '';
+        document.getElementById('assembleSection').style.display = 'block';
+        statusEl.textContent = '⏳ 正在拼装 description...';
+        statusEl.style.color = 'var(--text-secondary)';
 
         var resume = parseResumeInput.value.trim();
 
         try {
-            // 尝试从 LLM 输出中提取 JSON
             var skeleton;
             try {
                 skeleton = JSON.parse(parseResult);
             } catch(e) {
-                // 尝试提取 ```json ... ``` 块
                 var match = parseResult.match(/```json\s*([\s\S]*?)```/) || parseResult.match(/(\{[\s\S]*\})/);
                 if (match) {
                     skeleton = JSON.parse(match[1] || match[0]);
@@ -1312,23 +1302,18 @@
             var assembled = await resp.json();
             var assembledText = JSON.stringify(assembled, null, 2);
 
-            // 更新结果展示
             document.getElementById('parseResultContent').textContent = assembledText;
             parseResult = assembledText;
 
-            // 统计 description 填充情况
             var weCount = (assembled.workExperience || []).filter(function(e) { return e.description; }).length;
             var peCount = (assembled.projectExperience || []).filter(function(e) { return e.description; }).length;
-            statusEl.textContent = '✅ 已填充 ' + weCount + ' 条工作经历 + ' + peCount + ' 条项目经历';
+            statusEl.textContent = '✅ 已自动填充 ' + weCount + ' 条工作经历 + ' + peCount + ' 条项目经历的 description';
             statusEl.style.color = '#48bb78';
 
         } catch(e) {
             statusEl.textContent = '❌ 拼装失败: ' + e.message;
             statusEl.style.color = '#e53e3e';
         }
-
-        btn.disabled = false;
-        btn.textContent = '📋 填充信息（拼装 description）';
     }
 
     // 从服务器加载默认解析规则
