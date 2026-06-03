@@ -443,9 +443,37 @@ const server = http.createServer((req, res) => {
                     return res.end(JSON.stringify({ error: 'query 不能为空' }));
                 }
 
+                // 从简历原文中提取高密度语义段落作为搜索query
+                function extractSearchQuery(text) {
+                    var parts = [];
+
+                    // 提取工作经历中的「公司名（时间）职位」
+                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)]+（\d{4}\.\d{2}[^）]*）([一-龥\/·]+)/g);
+                    if (workMatches) {
+                        var positions = workMatches.map(function(m) {
+                            var pm = m.match(/）([一-龥\/·]+)/);
+                            return pm ? pm[1].trim() : '';
+                        }).filter(Boolean);
+                        if (positions.length) parts.push(positions.join(' '));
+                    }
+
+                    // 提取求职意向中的目标职位
+                    var intentMatch = text.match(/求职意向\s*([一-龥a-zA-Z]{2,30})/);
+                    if (intentMatch) parts.push(intentMatch[1].trim());
+
+                    // 提取自我评价段落（取前200字）
+                    var evalMatch = text.match(/自我评价[：:]\s*([\s\S]{10,300}?)(?=\[|【|$)/);
+                    if (evalMatch) parts.push(evalMatch[1].trim().substring(0, 200));
+
+                    if (parts.length === 0) return text.substring(0, 500);
+                    return parts.join(' ');
+                }
+
+                var searchQuery = extractSearchQuery(query);
+
                 const ragPayload = JSON.stringify({
                     collection: 'function_labels',
-                    query: query,
+                    query: searchQuery,
                     top_k: 20,
                     rerank: true,
                     rerank_top_k: 5,
@@ -464,6 +492,7 @@ const server = http.createServer((req, res) => {
                     ragRes.on('end', () => {
                         try {
                             const ragData = JSON.parse(ragBody);
+                            ragData.search_query = searchQuery; // 返回提取的关键词供调试
                             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                             res.end(JSON.stringify(ragData));
                         } catch (e) {
