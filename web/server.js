@@ -448,11 +448,11 @@ const server = http.createServer((req, res) => {
                     var parts = [];
 
                     // 提取工作经历中的「公司名（时间）职位」
-                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）([一-龥\/·（）]+)/g);
+                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）([一-龥\/·（）a-zA-Z\s]+)/g);
                     if (workMatches) {
-                        var stopWords = ['下属人数', '职责业绩', '所在部门', '工作地点', '汇报对象', '薪资'];
+                        var stopWords = ['下属人数', '职责业绩', '所在部门', '工作地点', '汇报对象', '薪资', '附件简历', '对方已上传'];
                         var positions = workMatches.map(function(m) {
-                            var pm = m.match(/）([一-龥\/·（）]+)/);
+                            var pm = m.match(/）([一-龥\/·（）a-zA-Z\s]+)/);
                             if (!pm) return '';
                             var pos = pm[1].trim();
                             // 截断停止词
@@ -461,7 +461,9 @@ const server = http.createServer((req, res) => {
                                 if (idx > 0) pos = pos.substring(0, idx);
                             }
                             return pos;
-                        }).filter(Boolean);
+                        }).filter(function(p) {
+                            return p.length >= 2 && !p.match(/^[一-龥a-zA-Z（）\(\)\s]+[（(]\s*$/);
+                        });
                         if (positions.length) parts.push(positions.join(' '));
                     }
 
@@ -469,9 +471,20 @@ const server = http.createServer((req, res) => {
                     var intentMatch = text.match(/求职意向\s*([一-龥a-zA-Z]{2,30})/);
                     if (intentMatch) parts.push(intentMatch[1].trim());
 
-                    // 提取自我评价段落（取前200字）
-                    var evalMatch = text.match(/自我评价[：:]\s*([\s\S]{10,300}?)(?=\[|【|$)/);
-                    if (evalMatch) parts.push(evalMatch[1].trim().substring(0, 200));
+                    // 提取自我评价段落
+                    var evalMatch = text.match(/自我评价[：:]*\s*([\s\S]{10,200}?)(?=\[|【|$)/);
+                    if (!evalMatch) {
+                        // 无标签：匹配以"擅长"/"具备"/"熟悉"开头的短句（到句号/分号结束）
+                        var sentences = [];
+                        var re = /(?:擅长|具备|熟悉|精通|工作认真|拥有|善于)[一-龥a-zA-Z，,。；;：:\s]{8,80}[。；;]/g;
+                        var m;
+                        while ((m = re.exec(text)) !== null) {
+                            sentences.push(m[0]);
+                            if (sentences.length >= 3) break;
+                        }
+                        if (sentences.length) evalMatch = [null, sentences.join(' ')];
+                    }
+                    if (evalMatch) parts.push(evalMatch[1].trim().substring(0, 150));
 
                     if (parts.length === 0) return text.substring(0, 500);
                     return parts.join(' ');

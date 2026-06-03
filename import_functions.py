@@ -51,8 +51,8 @@ for row in rows:
     f3 = row.get("third_function", "").strip()
     keywords = row.get("keywords", "").strip()
 
-    # 跳过没有职能名称的行
-    if not f1:
+    # 跳过没有职能名称的行，或只有一级职能没有二三级的空壳行
+    if not f1 or (not f2 and not f3):
         continue
 
     # 构造搜索文档：职能路径 + 关键词
