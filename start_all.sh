@@ -29,6 +29,8 @@ else
         --host 0.0.0.0 --port 8003 \
         --max-model-len 32768 \
         --gpu-memory-utilization 0.9 \
+        --enable-chunked-prefill \
+        --max-num-seqs 16 \
         > "$SCRIPT_DIR/vllm.log" 2>&1 &
     VLLM_PID=$!
 
