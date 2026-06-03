@@ -11,6 +11,7 @@ const LOGS_PATH = path.join(__dirname, 'logs.html');
 const TEST_CASES_PATH = path.join(__dirname, '..', 'test', 'resume_test_cases.json');
 const DEFAULT_TEST_CASE_PATH = path.join(__dirname, '123.txt');
 const SCORING_RULES_PATH = path.join(__dirname, '..', 'config', 'scoring_rules.json');
+const PARSE_RULES_PATH = path.join(__dirname, '..', 'config', 'parse_rules.json');
 const PROXY_BASE = process.env.PROXY_BASE || 'http://127.0.0.1:8000';
 
 // ========== Helper: call vLLM chat/completions and stream back Ollama-style generate chunks ==========
@@ -313,6 +314,49 @@ const server = http.createServer((req, res) => {
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({
                     message: '规则更新成功',
+                    version: current.version,
+                    updated_at: current.updated_at,
+                    rules_length: (current.rules || '').length,
+                }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: '无效的 JSON: ' + e.message }));
+            }
+        });
+        return;
+    }
+
+    // ========== 解析规则管理 ==========
+    if (req.method === 'GET' && req.url === '/api/parse-rules') {
+        try {
+            const data = JSON.parse(fs.readFileSync(PARSE_RULES_PATH, 'utf8'));
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+            return res.end(JSON.stringify(data));
+        } catch (e) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: '解析规则文件未找到' }));
+        }
+    }
+
+    if (req.method === 'PUT' && req.url === '/api/parse-rules') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const update = JSON.parse(body);
+                let current = {};
+                try { current = JSON.parse(fs.readFileSync(PARSE_RULES_PATH, 'utf8')); } catch(e) {}
+
+                if (update.rules !== undefined) current.rules = update.rules;
+                if (update.version !== undefined) current.version = update.version;
+                if (update.enabled !== undefined) current.enabled = update.enabled;
+
+                current.updated_at = new Date().toISOString().replace('Z', '+08:00');
+                fs.writeFileSync(PARSE_RULES_PATH, JSON.stringify(current, null, 2), 'utf8');
+
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    message: '解析规则更新成功',
                     version: current.version,
                     updated_at: current.updated_at,
                     rules_length: (current.rules || '').length,

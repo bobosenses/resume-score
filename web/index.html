@@ -428,7 +428,10 @@
                     <textarea id="parseRulesInput" rows="10" placeholder="在此定义解析规则...&#10;例如：提取姓名、学历、工作经历、技能等字段，以JSON格式输出"></textarea>
                     <div class="hint">
                         <span id="parseRulesCharCount">0 字符</span>
-                        <span id="parseRulesTokenEst">~0 tokens</span>
+                        <span style="display:flex;align-items:center;gap:8px">
+                            <span id="parseRulesTokenEst">~0 tokens</span>
+                            <button class="btn-small" onclick="loadParseRulesFromServer()">🔄 加载默认规则</button>
+                        </span>
                     </div>
                 </div>
 
@@ -1251,6 +1254,21 @@
             alert('复制失败，请手动选择文本');
         });
     }
+
+    // 从服务器加载默认解析规则
+    window.loadParseRulesFromServer = function() {
+        fetch('/api/parse-rules').then(function(resp) { return resp.json(); }).then(function(data) {
+            if (data.rules) {
+                parseRulesInput.value = data.rules;
+                updateParseCharCount();
+            }
+        }).catch(function(e) {
+            alert('加载解析规则失败: ' + e.message);
+        });
+    };
+
+    // 页面加载时自动加载默认解析规则
+    loadParseRulesFromServer();
     </script>
 </body>
 </html>
