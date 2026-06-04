@@ -22,8 +22,12 @@ function streamChatCompletion(messages, options, res) {
         messages: messages,
         stream: true,
         max_tokens: options.max_tokens || 600,
-        temperature: options.temperature || 0.1,
+        temperature: options.temperature !== undefined ? options.temperature : 0.1,
     };
+    // temperature 为 0 时加 seed 保证完全确定性
+    if (vllmPayload.temperature === 0) {
+        vllmPayload.seed = 42;
+    }
 
     if (options.thinking !== undefined) {
         vllmPayload.chat_template_kwargs = { enable_thinking: !!options.thinking };
@@ -111,7 +115,7 @@ function proxyGenerate(payload, res) {
     const options = {
         model: parsed.model || MODEL,
         max_tokens: (parsed.options && parsed.options.num_predict) || 600,
-        temperature: (parsed.options && parsed.options.temperature) || 0.1,
+        temperature: parsed.options && parsed.options.temperature !== undefined ? parsed.options.temperature : 0.1,
         thinking: parsed.thinking,
     };
 
@@ -446,37 +450,53 @@ const server = http.createServer((req, res) => {
                 // 从简历原文中提取高密度语义段落作为搜索query
                 function extractSearchQuery(text) {
                     var parts = [];
-                    var workMatches = text.match(/[一-龥a-zA-Z（）\(\)·\-]+（\d{4}\.\d{2}[^）]*）([一-龥\/·（）a-zA-Z\s]+)/g);
-                    if (workMatches) {
-                        var stopWords = ['下属人数', '职责业绩', '所在部门', '工作地点', '汇报对象', '薪资', '附件简历', '对方已上传'];
-                        var positions = workMatches.map(function(m) {
-                            var pm = m.match(/）([一-龥\/·（）a-zA-Z\s]+)/);
-                            if (!pm) return '';
-                            var pos = pm[1].trim();
-                            for (var w = 0; w < stopWords.length; w++) {
-                                var idx = pos.indexOf(stopWords[w]);
-                                if (idx > 0) pos = pos.substring(0, idx);
-                            }
-                            return pos;
-                        }).filter(function(p) {
-                            return p.length >= 2 && !p.match(/^[一-龥a-zA-Z（）\(\)\s]+[（(]\s*$/);
-                        });
-                        if (positions.length) parts.push(positions.join(' '));
+                    var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+
+                    // === 1. 提取职位名称（不依赖日期格式） ===
+                    // 策略：扫描所有行，找含职位关键词的短行（2-20字）
+                    var posKeywords = /(?:工程师|经理|主管|总监|专员|助理|设计师|分析师|架构师|技术员|研究员|咨询师|策划师)/;
+                    var noiseRe = /^(查看企业|搜索同事|还有|继续沟通|职责业绩|下属人数|工作地点|简历编号|外商独资|电子\/|男\s|女\s|\d{3}岁|方便联系|继续沟通|推荐职位|查看联系|收藏|转发|向TA索要|TA上传|附件简历|声明：|未填写|搜索同学)/;
+                    var positions = [];
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i];
+                        if (line.length > 25 || line.length < 2) continue;
+                        if (noiseRe.test(line)) continue;
+                        if (posKeywords.test(line)) {
+                            // 清理：去掉行首的序号、标点等
+                            var pos = line.replace(/^[①②③④⑤⑥⑦⑧⑨⑩\d]+[.、)\]】】\s]*/, '').trim();
+                            if (pos.length >= 2) positions.push(pos);
+                        }
                     }
-                    var intentMatch = text.match(/求职意向\s*([一-龥a-zA-Z]{2,30})/);
-                    if (intentMatch) parts.push(intentMatch[1].trim());
-                    var evalMatch = text.match(/自我评价[：:]*\s*([\s\S]{10,200}?)(?=\[|【|$)/);
-                    if (!evalMatch) {
+                    // 去重，保留前5个
+                    var seen = {};
+                    positions = positions.filter(function(p) {
+                        if (seen[p]) return false;
+                        seen[p] = true;
+                        return true;
+                    }).slice(0, 5);
+                    if (positions.length) parts.push(positions.join(' '));
+
+                    // === 2. 提取自我评价/技能描述（不依赖标签名） ===
+                    // 策略：找"熟悉/擅长/精通"开头的句子，或"自我评价/个人总结"标签后的内容
+                    var evalText = '';
+                    // 先尝试标签
+                    var evalLabel = text.match(/(?:自我评价|个人总结|自我描述|个人描述|自我介绍)[：:\s]*([\s\S]{10,300}?)(?=附件简历|对方已上传|TA上传|声明：|向TA索要|我的技能|语言能力|教育经历|$)/);
+                    if (evalLabel) {
+                        evalText = evalLabel[1].replace(/\n/g, ' ').trim();
+                    }
+                    // 如果标签没找到，用语义句子兜底
+                    if (!evalText || evalText.length < 10) {
                         var sentences = [];
-                        var re = /(?:擅长|具备|熟悉|精通|工作认真|拥有|善于)[一-龥a-zA-Z，,。；;：:\s]{8,80}[。；;]/g;
+                        var skillRe = /(?:擅长|具备|熟悉|精通|拥有|善于|多年)[一-龥a-zA-Z，,。；;：:\s（）()\/·、]{8,100}[。；;]/g;
                         var m;
-                        while ((m = re.exec(text)) !== null) {
-                            sentences.push(m[0]);
+                        while ((m = skillRe.exec(text)) !== null) {
+                            sentences.push(m[0].trim());
                             if (sentences.length >= 3) break;
                         }
-                        if (sentences.length) evalMatch = [null, sentences.join(' ')];
+                        if (sentences.length) evalText = sentences.join(' ');
                     }
-                    if (evalMatch) parts.push(evalMatch[1].trim().substring(0, 150));
+                    if (evalText) parts.push(evalText.substring(0, 150));
+
                     if (parts.length === 0) return text.substring(0, 500);
                     return parts.join(' ');
                 }
