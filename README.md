@@ -1,320 +1,280 @@
 # 简历智能打分系统
 
-基于 **vLLM + Qwen3-8B-FP8** 的简历智能打分系统，集成 RAG 语义检索、打分规则热加载、多轮对话等功能。
+基于 **vLLM + Qwen3-8B-AWQ** 的简历智能打分系统。围绕 `scoring_rules.json v3.0` 的 Layer0/Layer1 闸门模型，集成自适应限流网关、RAG 语义检索、规则热加载、监控聚合等模块。
 
 ## 功能特性
 
-- 🎯 **简历智能打分** — 输入简历 + JD，自动按规则评分并输出结构化结果
-- 💭 **思考模式** — 可切换深度推理模式，提升复杂任务的评分质量
-- 📋 **打分规则热加载** — 修改规则文件或通过 API/页面更新，无需重启服务
-- 🔍 **RAG 语义检索** — 集成 bge-m3 Embedding + bge-reranker 精排的向量检索
-- 🌐 **Web 管理界面** — 简历打分 + AI Chat + 系统设置三合一页面
-- ⚡ **高性能推理** — vLLM 连续批处理，A10 GPU 支持 30+ 并发
+- **分层打分（Layered Scoring）** — Layer0 四维门槛 + Layer1 硬性约束 + Layer2 加分 + Layer3 扣分；不满足闸门直接低分熔断
+- **主经历判定** — 篇幅/时长/角色三准则任二满足即视为主经历，非主经历自动封顶 10 分
+- **年限 ±1 容忍** — JD 年限要求允许 ±1 年浮动，边界差距轻扣 3 分，避免一刀切误杀
+- **规则热加载** — `config/scoring_rules.json` 改文件即生效，也可通过 API/页面更新
+- **自适应限流** — Throttle Gateway 根据 vLLM 健康度动态调整 capacity，503 快速失败
+- **RAG 检索** — bge-m3 Embedding + bge-reranker-v2-m3 精排
+- **Web 管理界面** — 简历打分、AI Chat、监控、设置一体化
+- **请求日志** — SQLite 持久化，支持多维筛选与详情查看
 
 ## 系统架构
 
 ```
-外部调用者 / 浏览器
+浏览器 / 外部调用
     │
-    ├─── :8000 ──→ Rules Proxy ──→ :8003 ──→ vLLM (Qwen3-8B-FP8)
-    │    注入打分规则              模型推理
+    ├─ :3000  Web 前端 (Node.js)
+    │         └─ /api/score-layered  ──┐
+    │                                  │
+    ├─ :3100  Throttle Gateway   ←─────┘   自适应限流, 503 fail-fast
+    │         │
+    │         └─→ :3000 内部回环 → vLLM
     │
-    ├─── :3000 ──→ Web 前端 (Node.js)
-    │    简历打分 + AI Chat + 系统设置
+    ├─ :3101  Monitor API              聚合 throttle + vllm + sqlite
     │
-    ├─── :8001 ──→ ChromaDB 向量数据库
+    ├─ :8000  Rules Proxy        →  :8003  vLLM (Qwen3-8B-AWQ)
+    │         注入打分规则
     │
-    └─── :8002 ──→ RAG API (Embedding + Rerank)
+    ├─ :8001  ChromaDB
+    └─ :8002  RAG API (Embedding + Rerank)
 ```
+
+## 打分规则架构（scoring_rules.json v3.0）
+
+四层模型，自上而下：
+
+| 层 | 名称 | 作用 |
+|----|------|------|
+| Layer0 | 四维门槛 | 行业/产品/职能/年限任一 < 70 分 → 总分按门槛分计算 |
+| Layer1 | 硬性约束 | 学历/经验/产品/职能 Mismatch → 总分封顶 30 分 |
+| Layer2 | 加分项 | 主经历命中加权、稀缺产品加分等 |
+| Layer3 | 扣分项 | Must 项缺失 ×3 分、跳槽频繁等 |
+
+**主经历判定**：候选某段经历占简历篇幅 ≥50% / 时长 ≥60% / 担任核心角色，三准则中任二满足即视为主经历。非主经历总分上限 10 分，边缘经历计 0 分。
+
+**年限容忍**：JD 要求 `minExp` ~ `maxExp` 年。`expGap ≤ 1` 且 `expOverGap ≤ 1` 视为达标（边界轻扣 3 分）；`expGap ≥ 3` 扣 20 分。
+
+详情见 `docs/four_round_scoring_spec.md`。
 
 ## 项目结构
 
 ```
-├── rules_proxy.py          # Rules Injection Proxy（端口 8000）
-├── log_db.py                # 请求日志数据库模块（SQLite）
-├── chromadb_api.py          # RAG 语义检索 API（端口 8002）
-├── chromadb_service.py      # ChromaDB 使用示例
+├── rules_proxy.py              # Rules Injection Proxy (8000)
+├── chromadb_api.py             # RAG API (8002)
+├── log_db.py                   # 请求日志 SQLite 模块
 ├── config/
-│   └── scoring_rules.json   # 打分规则（热加载，改文件即生效）
+│   └── scoring_rules.json      # 打分规则 v3.0 (热加载)
+├── throttle/
+│   ├── gateway.js              # Throttle Gateway (3100)
+│   └── monitor_api.js          # Monitor API (3101)
 ├── web/
-│   ├── server.js            # Web 服务端（端口 3000）
-│   ├── index.html           # 前端页面
-│   ├── logs.html            # 请求日志查看页面
-│   ├── benchmark.html       # 压测报告仪表盘
-│   └── 123.txt              # 默认测试用例
-├── logs/
-│   └── request_logs.db      # 请求日志数据库（自动生成，不上传）
-├── knowledge_base/
-│   └── knowledge_base.csv   # 知识库样本数据
-├── test_cases.json          # 测试用例（3份简历+JD+规则）
-├── test_scoring.py          # 自动化测试脚本
-├── start_all.sh             # 一键启动所有服务
-├── stop_all.sh              # 一键停止所有服务
-├── requirements.txt         # Python 依赖
-├── API.md                   # 接口调用文档
-└── README.md                # 本文件
+│   ├── server.js               # Web 服务端 (3000)
+│   │                           # 含 /api/score-layered 分层打分接口
+│   ├── index.html              # 主页面
+│   ├── monitor.html            # 实时监控
+│   ├── logs.html               # 请求日志
+│   └── benchmark.html          # 压测仪表盘
+├── docs/
+│   ├── four_round_scoring_spec.md  # 分层打分协议
+│   └── prompt_template.sql         # Prompt 模板 (脱敏)
+├── test_cases.json             # 测试用例
+├── test_scoring.py             # 回归测试
+├── compare_scoring.py          # 新旧版对比
+├── concurrency_test.py         # 并发压测
+├── start_all.sh / stop_all.sh  # 一键启停
+├── .env.example                # 环境变量模板
+├── requirements.txt
+└── API.md
 ```
 
 ## 快速开始
 
 ### 1. 环境要求
 
-- **操作系统**: Ubuntu 22.04+
-- **GPU**: NVIDIA A10 23GB（或同等显存以上）
-- **CUDA**: 12.8+
-- **Node.js**: >= 18
-- **Python**: >= 3.10
+| 项 | 版本 |
+|---|---|
+| OS | Ubuntu 22.04+ |
+| GPU | NVIDIA A10 23GB+ |
+| CUDA | 12.8+ |
+| Python | 3.10+ |
+| Node.js | 18+ |
+| MySQL | 8.0+（或阿里云 RDS） |
 
-### 2. 下载模型
+### 2. 拉代码 + 配置
 
 ```bash
-# 创建模型目录
+git clone git@github.com:bobosenses/resume-score.git
+cd resume-score
+
+# 环境变量（MySQL 等敏感配置）— 不进 git
+cp .env.example .env.local
+chmod 600 .env.local
+vim .env.local              # 填入 MYSQL_HOST / USER / PASSWORD / DATABASE
+```
+
+`.env.local` 在 `.gitignore` 中，永远不会被提交。`start_all.sh` 启动前会 `source` 一次，server.js / rules_proxy.py 由此读取数据库凭据。
+
+### 3. 下载模型
+
+```bash
 mkdir -p models
 
-# 下载 Qwen3-8B-FP8（LLM 推理，约 8.8GB）
-pip install huggingface-hub
-HF_ENDPOINT=https://hf-mirror.com huggingface-cli download Qwen/Qwen3-8B-FP8 --local-dir models/Qwen3-8B-FP8
+# LLM 推理
+HF_ENDPOINT=https://hf-mirror.com huggingface-cli download \
+    Qwen/Qwen3-8B-AWQ --local-dir models/Qwen3-8B-AWQ
 
-# 下载 bge-m3（Embedding，约 4.3GB）
-HF_ENDPOINT=https://hf-mirror.com huggingface-cli download BAAI/bge-m3 --local-dir models/bge-m3 --exclude 'imgs/*'
-
-# 下载 bge-reranker-v2-m3（Rerank，约 2.2GB）
-HF_ENDPOINT=https://hf-mirror.com huggingface-cli download BAAI/bge-reranker-v2-m3 --local-dir models/bge-reranker-v2-m3
+# Embedding + Rerank
+HF_ENDPOINT=https://hf-mirror.com huggingface-cli download \
+    BAAI/bge-m3 --local-dir models/bge-m3 --exclude 'imgs/*'
+HF_ENDPOINT=https://hf-mirror.com huggingface-cli download \
+    BAAI/bge-reranker-v2-m3 --local-dir models/bge-reranker-v2-m3
 ```
 
-**模型下载地址：**
+| 模型 | 用途 | 大小 |
+|---|---|---|
+| Qwen3-8B-AWQ | LLM 推理 | ~6 GB |
+| bge-m3 | 文本向量化 | 4.3 GB |
+| bge-reranker-v2-m3 | 检索精排 | 2.2 GB |
 
-| 模型 | HuggingFace | 用途 | 大小 |
-|------|-------------|------|------|
-| Qwen3-8B-FP8 | [Qwen/Qwen3-8B-FP8](https://huggingface.co/Qwen/Qwen3-8B-FP8) | LLM 推理 | 8.8GB |
-| bge-m3 | [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) | 文本向量化 | 4.3GB |
-| bge-reranker-v2-m3 | [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) | 搜索结果精排 | 2.2GB |
-
-> 国内下载可使用镜像：`HF_ENDPOINT=https://hf-mirror.com`
-
-### 3. 安装依赖
+### 4. 安装依赖
 
 ```bash
-# 创建 Python 虚拟环境
 python3 -m venv venv
 source venv/bin/activate
-
-# 安装 Python 依赖
 pip install -r requirements.txt
+
+cd web && npm install && cd ..
 ```
 
-### 4. 一键启动
+### 5. 一键启动
 
 ```bash
-bash start_all.sh
+./start_all.sh
 ```
 
-启动顺序：vLLM (8003) → Rules Proxy (8000) → Web (3000) → ChromaDB (8001) → RAG API (8002)
+启动顺序：vLLM (8003) → Web (3000) → Throttle (3100) → Monitor (3101) → Rules Proxy (8000) → ChromaDB (8001) → RAG (8002)。
 
-等待约 2 分钟（vLLM 加载模型），看到「所有服务启动完成」即可访问：
+初次启动 vLLM 加载模型约 90 秒，RAG API 加载 Embedding/Rerank 约 30 秒。
 
-- **Web 界面**: http://localhost:3000/
-- **LLM API**: http://localhost:8000/v1/
-- **RAG API**: http://localhost:8002/
+访问入口：
 
-### 5. 一键停止
+- Web 前端 — http://localhost:3000/
+- 实时监控 — http://localhost:3000/monitor
+- LLM API — http://localhost:8000/v1/
+- Throttle 状态 — http://localhost:3100/stats
+- Monitor 聚合 — http://localhost:3101/stats/all?window=10m
+
+### 6. 停止
 
 ```bash
-bash stop_all.sh
+./stop_all.sh
 ```
 
-## 使用方式
+## 接口说明
 
-### Web 页面
-
-打开 http://localhost:3000/，三个 Tab：
-
-| Tab | 功能 |
-|-----|------|
-| 简历打分 | 输入简历 + JD，自动评分（流式输出） |
-| AI Chat | 多轮对话，支持思考模式 |
-| ⚙️ 系统设置 | 思考模式开关、模型参数、打分规则编辑 |
-
-### API 调用 — 简历打分
+### 分层打分（推荐）
 
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
+POST /api/score-layered
+Content-Type: application/json
+
+{
+  "resume": "...",
+  "jd": "...",
+  "extra_rules": ""        # 可选, 追加到 scoring_rules.json
+}
+```
+
+返回流式事件：
+
+- `r1_done` — 简历结构化提取（含 experiences 数组）
+- `r2_done` — 产品匹配判定
+- `r3_done` — 职能匹配判定
+- `r4_done` — 单项扣加分
+- `final` — Layer0/1 闸门后的最终分数
+
+走 Throttle Gateway 限流，过载时立刻 503，避免堆积。
+
+### 普通对话 / 规则注入
+
+```bash
+POST http://localhost:8000/v1/chat/completions
+{
+  "model": "Qwen/Qwen3-8B-AWQ",
+  "messages": [...],
+  "use_scoring_rules": true   # 服务端注入 scoring_rules.json
+}
+```
+
+### 规则热加载
+
+```bash
+# 改文件
+vim config/scoring_rules.json
+
+# API 更新
+curl -X PUT http://localhost:8000/api/scoring-rules \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-8B-FP8",
-    "messages": [
-      {"role": "user", "content": "=== 候选人简历 ===\n张三，10年AI产品经验...\n\n=== JD ===\n高级AI产品经理..."}
-    ],
-    "max_tokens": 2000,
-    "use_scoring_rules": true
-  }'
+  -d '{"rules": "...", "version": "3.0.1"}'
+
+# 页面
+http://localhost:3000/ → 系统设置 → 编辑规则
 ```
 
-`use_scoring_rules: true` — 服务器自动注入打分规则，无需在请求中传递规则内容。
-
-### API 调用 — 普通对话
-
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed")
-resp = client.chat.completions.create(
-    model="Qwen/Qwen3-8B-FP8",
-    messages=[{"role": "user", "content": "你好"}],
-    max_tokens=200,
-)
-print(resp.choices[0].message.content)
-```
-
-### API 调用 — RAG 语义检索
+### RAG 检索
 
 ```python
 import requests
-
-# 添加文档
-requests.post("http://localhost:8002/documents/add", json={
-    "collection": "knowledge_base",
-    "documents": ["vLLM 是一个高性能推理引擎"],
-})
-
-# 检索
-resp = requests.post("http://localhost:8002/search", json={
-    "query": "什么是推理引擎",
+requests.post("http://localhost:8002/search", json={
+    "query": "刻蚀工艺工程师",
     "rerank": True,
 })
-print(resp.json())
 ```
 
-### 打分规则管理
+## 端口
 
-**文件热加载：**
+| 端口 | 服务 | 暴露 |
+|---|---|---|
+| 3000 | Web 前端 | 公网 |
+| 3100 | Throttle Gateway | 内网 |
+| 3101 | Monitor API | 内网 |
+| 8000 | Rules Proxy | 公网 |
+| 8001 | ChromaDB | 公网 |
+| 8002 | RAG API | 公网 |
+| 8003 | vLLM | 内网 |
 
-```bash
-# 直接编辑，下次请求自动生效
-vim config/scoring_rules.json
-```
+## 并发与容量（A10 23GB）
 
-**API 更新：**
+- 单请求 KV ≈ 0.7%，理论上限 ≈ 140 并发
+- Throttle Gateway 自适应 capacity 上限约 30，R2/R3 并行后稳态 3000–3400 req/h
+- 过载触发 503 fail-fast，前端按规则降级
 
-```bash
-curl -X PUT http://localhost:8000/api/scoring-rules \
-  -H "Content-Type: application/json" \
-  -d '{"rules": "新的打分规则...", "version": "2.0"}'
-```
-
-**页面管理：**
-
-打开 http://localhost:3000/ → ⚙️ 系统设置 → ✏️ 编辑 → 修改规则 → 💾 保存
-
-### 思考模式
-
-```bash
-# 开启思考模式（模型先推理再回答）
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -d '{"messages": [...], "chat_template_kwargs": {"enable_thinking": true}}'
-```
-
-在 Web 页面中，通过「⚙️ 系统设置」Tab 的开关全局控制。
-
-## 端口说明
-
-| 端口 | 服务 | 公网 |
-|------|------|------|
-| 8000 | Rules Proxy（LLM 入口） | ✅ |
-| 8001 | ChromaDB | ✅ |
-| 8002 | RAG API | ✅ |
-| 8003 | vLLM（内部） | ❌ |
-| 3000 | Web 前端 | ✅ |
-
-## 并发能力（NVIDIA A10 23GB）
-
-| 并发数 | KV Cache | 说明 |
-|--------|----------|------|
-| 10 | ~35% | 轻松 |
-| 30 | ~60% | 正常 |
-| 50 | ~99.8% | 极限 |
+详见 `docs/throttle-gateway.md` 与监控页面。
 
 ## 测试
 
 ```bash
-# 激活虚拟环境
 source venv/bin/activate
 
-# 测试所有简历
+# 单条回归
 python3 test_scoring.py --api web
 
-# 开启思考模式测试
-python3 test_scoring.py --api web --thinking
+# 新旧版对比（3-round vs layered）
+python3 compare_scoring.py
 
-# 对比测试
-python3 test_scoring.py --compare
+# 并发压测
+python3 concurrency_test.py
 ```
 
 ## 日志
 
 ```bash
-tail -f vllm.log        # vLLM 日志
-tail -f proxy.log       # Rules Proxy 日志
-tail -f web.log         # Web 服务日志
+tail -f vllm.log throttle.log proxy.log web.log monitor_api.log
 ```
 
-## 请求日志系统
+请求日志存于 `logs/request_logs.db`（SQLite），可通过 http://localhost:3000/logs 查看，支持时间/IP/状态码/关键字筛选。
 
-系统自动记录每次 API 请求的详细信息，支持 Web 界面查看和筛选。
+## 安全注意
 
-### 功能特性
-
-- 📊 **统计面板** — 总请求数、成功率、平均耗时、打分规则使用数
-- 🔍 **多维筛选** — 时间范围、IP 地址、HTTP 状态码、关键字搜索
-- 📋 **详情查看** — 点击查看完整的请求/响应内容
-- 🔄 **自动刷新** — 每 30 秒自动刷新数据
-- 💾 **SQLite 存储** — 轻量级数据库，无需额外服务
-
-### 记录字段
-
-| 字段 | 说明 |
-|------|------|
-| timestamp | 请求时间 |
-| client_ip | 客户端 IP |
-| method | HTTP 方法 |
-| path | 请求路径 |
-| request_body | 请求内容（自动过滤规则，只记录用户消息） |
-| response_body | 响应内容 |
-| status_code | HTTP 状态码 |
-| duration_ms | 请求耗时（毫秒） |
-| use_scoring_rules | 是否使用打分规则 |
-| model | 模型名称 |
-| prompt_tokens | 输入 Token 数 |
-| completion_tokens | 输出 Token 数 |
-
-### 访问方式
-
-- **Web 页面**: http://localhost:3000/logs
-- **日志 API**: `GET /api/logs?page=1&page_size=20`
-- **统计 API**: `GET /api/logs/stats/summary?hours=24`
-- **详情 API**: `GET /api/logs/{id}`
-
-### API 参数
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| start_time | string | 开始时间 (YYYY-MM-DD HH:MM:SS) |
-| end_time | string | 结束时间 (YYYY-MM-DD HH:MM:SS) |
-| client_ip | string | 按 IP 筛选 |
-| status_code | int | 按状态码筛选 |
-| use_scoring_rules | bool | 按是否使用规则筛选 |
-| keyword | string | 关键字搜索（请求/响应内容） |
-| page | int | 页码（默认 1） |
-| page_size | int | 每页数量（默认 20，最大 100） |
-
-### 数据存储
-
-日志存储在 `logs/request_logs.db`（SQLite），该目录已添加到 `.gitignore`，不会上传到 GitHub。
-
-如需备份日志：
-```bash
-cp logs/request_logs.db logs/backup_$(date +%Y%m%d).db
-```
+- 数据库密码、API Key、PII 数据 **绝不进 git**
+- 真实简历目录 `case/`、`结果集*.csv`、`*打分情况.csv` 已在 `.gitignore`
+- `.env.local` 权限设为 600（`chmod 600 .env.local`）
+- `docs/#开头.md` 的个人备忘也被 ignore
 
 ## License
 
