@@ -1,0 +1,12 @@
+{
+  "name": "throttle-gateway",
+  "version": "1.0.0",
+  "description": "Adaptive throttle gateway in front of resume scoring service",
+  "main": "gateway.js",
+  "scripts": {
+    "start": "node gateway.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

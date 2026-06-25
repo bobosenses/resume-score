@@ -11,10 +11,12 @@ echo "  简历智能打分系统 - 停止所有服务"
 echo "============================================"
 echo ""
 
-for PORT in 8003 8000 3000 8001 8002; do
+for PORT in 8003 8000 3101 3100 3000 8001 8002; do
     case $PORT in
         8003) NAME="vLLM" ;;
         8000) NAME="Rules Proxy" ;;
+        3101) NAME="Monitor API" ;;
+        3100) NAME="Throttle Gateway" ;;
         3000) NAME="Web 前端" ;;
         8001) NAME="ChromaDB" ;;
         8002) NAME="RAG API" ;;

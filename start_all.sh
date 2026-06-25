@@ -20,17 +20,28 @@ echo ""
 # 激活虚拟环境
 source "$SCRIPT_DIR/venv/bin/activate"
 
+# 加载本地敏感配置（MySQL 等）— 该文件不在 git
+if [ -f "$SCRIPT_DIR/.env.local" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env.local"
+    set +a
+else
+    echo -e "${RED}[错误]${NC} 未找到 .env.local，请先 cp .env.example .env.local 并填值"
+    exit 1
+fi
+
 # ========== 1. vLLM (端口 8003) ==========
 if ss -tlnp | grep -q ":8003 "; then
     echo -e "${YELLOW}[跳过]${NC} vLLM 已在运行 (端口 8003)"
 else
     echo -n "[启动] vLLM (端口 8003) ... "
-    nohup vllm serve "$SCRIPT_DIR/models/Qwen3-8B-FP8" \
+    nohup vllm serve "$SCRIPT_DIR/models/Qwen3-8B-AWQ" \
         --host 0.0.0.0 --port 8003 \
-        --max-model-len 32768 \
-        --gpu-memory-utilization 0.9 \
+        --max-model-len 12288 \
+        --gpu-memory-utilization 0.95 \
+	        --trust-remote-code \
         --enable-chunked-prefill \
-        --max-num-seqs 16 \
+        --max-num-seqs 128 \
         > "$SCRIPT_DIR/vllm.log" 2>&1 &
     VLLM_PID=$!
 
@@ -48,23 +59,7 @@ else
     done
 fi
 
-# ========== 2. Rules Proxy (端口 8000) ==========
-if ss -tlnp | grep -q ":8000 "; then
-    echo -e "${YELLOW}[跳过]${NC} Rules Proxy 已在运行 (端口 8000)"
-else
-    echo -n "[启动] Rules Proxy (端口 8000) ... "
-    nohup python3 "$SCRIPT_DIR/rules_proxy.py" > "$SCRIPT_DIR/proxy.log" 2>&1 &
-    PROXY_PID=$!
-    sleep 3
-    if ss -tlnp | grep -q ":8000 "; then
-        echo -e "${GREEN}OK${NC} (PID=$PROXY_PID)"
-    else
-        echo -e "${RED}失败${NC} (请检查 proxy.log)"
-        exit 1
-    fi
-fi
-
-# ========== 3. Web 前端 (端口 3000) ==========
+# ========== 2. Web 前端 (端口 3000) ==========
 if ss -tlnp | grep -q ":3000 "; then
     echo -e "${YELLOW}[跳过]${NC} Web 前端已在运行 (端口 3000)"
 else
@@ -78,6 +73,58 @@ else
         echo -e "${GREEN}OK${NC} (PID=$WEB_PID)"
     else
         echo -e "${RED}失败${NC} (请检查 web.log)"
+        exit 1
+    fi
+fi
+
+# ========== 3. Throttle Gateway (端口 3100) ==========
+# 在 rules_proxy 与 web/server.js 之间, 对 /api/score-multi-round 做自适应限流
+if ss -tlnp | grep -q ":3100 "; then
+    echo -e "${YELLOW}[跳过]${NC} Throttle Gateway 已在运行 (端口 3100)"
+else
+    echo -n "[启动] Throttle Gateway (端口 3100) ... "
+    nohup node "$SCRIPT_DIR/throttle/gateway.js" > "$SCRIPT_DIR/throttle.log" 2>&1 &
+    GW_PID=$!
+    sleep 2
+    if ss -tlnp | grep -q ":3100 "; then
+        echo -e "${GREEN}OK${NC} (PID=$GW_PID)"
+    else
+        echo -e "${RED}失败${NC} (请检查 throttle.log)"
+        exit 1
+    fi
+fi
+
+# ========== 3b. Monitor API (端口 3101) ==========
+# 给 monitor.html 提供聚合统计 (throttle + vllm + 简历 sqlite)
+if ss -tlnp | grep -q ":3101 "; then
+    echo -e "${YELLOW}[跳过]${NC} Monitor API 已在运行 (端口 3101)"
+else
+    echo -n "[启动] Monitor API (端口 3101) ... "
+    nohup node "$SCRIPT_DIR/throttle/monitor_api.js" > "$SCRIPT_DIR/monitor_api.log" 2>&1 &
+    MAPI_PID=$!
+    sleep 2
+    if ss -tlnp | grep -q ":3101 "; then
+        echo -e "${GREEN}OK${NC} (PID=$MAPI_PID)"
+    else
+        echo -e "${RED}失败${NC} (请检查 monitor_api.log)"
+        exit 1
+    fi
+fi
+
+# ========== 4. Rules Proxy (端口 8000) ==========
+# WEB_BASE 指向 3100, 让 multi-round 流量先经过限流网关
+if ss -tlnp | grep -q ":8000 "; then
+    echo -e "${YELLOW}[跳过]${NC} Rules Proxy 已在运行 (端口 8000)"
+else
+    echo -n "[启动] Rules Proxy (端口 8000) ... "
+    WEB_BASE="http://127.0.0.1:3100" \
+    nohup python3 "$SCRIPT_DIR/rules_proxy.py" > "$SCRIPT_DIR/proxy.log" 2>&1 &
+    PROXY_PID=$!
+    sleep 3
+    if ss -tlnp | grep -q ":8000 "; then
+        echo -e "${GREEN}OK${NC} (PID=$PROXY_PID)"
+    else
+        echo -e "${RED}失败${NC} (请检查 proxy.log)"
         exit 1
     fi
 fi
@@ -120,6 +167,9 @@ echo -e "  ${GREEN}所有服务启动完成${NC}"
 echo "============================================"
 echo ""
 echo "  Web 前端:      http://localhost:3000/"
+echo "  实时监控:      http://localhost:3000/monitor"
+echo "  Throttle GW:   http://localhost:3100/stats"
+echo "  Monitor API:   http://localhost:3101/stats/all?window=10m"
 echo "  LLM API:       http://localhost:8000/v1/"
 echo "  RAG API:       http://localhost:8002/"
 echo "  ChromaDB:      http://localhost:8001/"

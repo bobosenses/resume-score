@@ -1,4 +1,15 @@
-# Python
+# =========================
+#  敏感配置 — 绝不提交
+# =========================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# =========================
+#  Python
+# =========================
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -12,40 +23,87 @@ venv/
 .venv/
 env/
 
-# Model files (too large, download separately)
+# =========================
+#  Node
+# =========================
+node_modules/
+
+# =========================
+#  模型 / 大文件
+# =========================
 models/
 *.safetensors
 *.bin
 *.pt
 *.gguf
 
-# Logs
+# =========================
+#  日志 / 数据库
+# =========================
 *.log
 logs/
 *.db
+*.sqlite
+*.sqlite3
 
-# Runtime data
+# 运行时数据
 chromadb-data/
 chroma-data/
 
-# ZIP source files
+# =========================
+#  归档 / 压缩包
+# =========================
 *.zip
+*.tar.gz
+*.tgz
 
-# macOS
+# =========================
+#  备份文件
+# =========================
+*.bak
+*.bak[0-9]
+*.bak_*
+*.bak[0-9]_*
+*.orig
+*.rej
+*~
+
+# =========================
+#  真实数据 / PII（简历评分结果含手机号）
+# =========================
+case/
+结果集*.csv
+*打分情况.csv
+function_verify_result.json
+compare_result*.log
+compare_result*.json
+scoring_comparison.log
+concurrency_test.log
+
+# =========================
+#  个人备忘 / 临时分析文档（# 开头的文件名）
+# =========================
+docs/\#*.md
+*草稿*.md
+
+# =========================
+#  系统 / IDE
+# =========================
 __MACOSX/
 .DS_Store
-
-# Claude Code
-.claude/
-
-# IDE
+Thumbs.db
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-Thumbs.db
+# =========================
+#  Claude Code 私有
+# =========================
+.claude/
 
+# =========================
+#  历史遗留
+# =========================
 # 原始工具包（已整合到 web/ 目录）
 ollama-resume-toolkit/

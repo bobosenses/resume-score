@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resume Scoring · Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,400&family=JetBrains+Mono:wght@300;400;500&display=swap">
+<style>
+/* ============================================================
+   设计语言 -- 金融终端 / 印刷品审美
+   - 衬线标题 (Newsreader)，等宽数字 (JetBrains Mono)，严格灰阶
+   - 无渐变、无圆角、无 emoji、无霓虹
+   - 唯一 accent: 琥珀 (amber)
+   - 支持 暗 / 明 两套主题
+   ============================================================ */
+
+/* 默认: 深色 */
+:root {
+  --bg:        #0b0b0c;
+  --surface:   #131210;
+  --text:      #e9e6df;
+  --text-2:    #8b8881;
+  --text-3:    #5a5752;
+  --text-4:    #3a3833;
+  --rule:      #1d1b17;
+  --rule-2:    #2a2620;
+  --amber:     #c89a3a;
+  --amber-dim: #8a6826;
+  --warn:      #b07235;
+  --alarm:     #9c3c2b;
+  --good:      #7a8b5f;
+  --tt-bg:     rgba(11,11,12,0.96);
+}
+
+/* 浅色: 米纸 + 墨色, 一抹琥珀 */
+:root[data-theme="light"] {
+  --bg:        #f7f5f0;
+  --surface:   #efece5;
+  --text:      #1c1a16;
+  --text-2:    #6b685f;
+  --text-3:    #9a9790;
+  --text-4:    #c5c1b8;
+  --rule:      #e0ddd5;
+  --rule-2:    #cfccc3;
+  --amber:     #9a6e1c;
+  --amber-dim: #7a5614;
+  --warn:      #8c4f1c;
+  --alarm:     #7d2f1b;
+  --good:      #5d7a3c;
+  --tt-bg:     rgba(247,245,240,0.98);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'PingFang SC', sans-serif;
+  padding: 24px 32px 40px 32px;
+  min-height: 100vh;
+  font-size: 13px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.01em;
+}
+
+.serif { font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif; font-weight: 400; }
+.mono  { font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+/* ---- Header ---- */
+.header {
+  display: flex; align-items: baseline; gap: 18px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.header h1 {
+  font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif;
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+.header .ver {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.header .status {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10px;
+  color: var(--text-2);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.header .right {
+  margin-left: auto;
+  display: flex; align-items: baseline; gap: 22px;
+  color: var(--text-2);
+  font-size: 11px;
+}
+.header .right .label { color: var(--text-3); margin-right: 6px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
+.header .right .v { font-family: 'JetBrains Mono', monospace; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.dot-live  { background: var(--good); }
+.dot-idle  { background: var(--text-4); }
+.dot-warn  { background: var(--amber); }
+.dot-error { background: var(--alarm); }
+
+/* ---- KPI ---- */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.kpi {
+  padding: 16px 16px 14px 16px;
+  border-right: 1px solid var(--rule);
+  position: relative;
+}
+.kpi:last-child { border-right: none; }
+.kpi .lbl {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.kpi .val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.kpi .unit {
+  font-family: -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 4px;
+}
+.kpi .sub {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 7px;
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .bar-wrap {
+  background: var(--rule);
+  height: 1px;
+  margin-top: 9px;
+  overflow: hidden;
+}
+.kpi .bar-fill {
+  height: 100%;
+  background: var(--text-2);
+  transition: width 0.6s ease;
+}
+.kpi.k-amber .val      { color: var(--amber); }
+.kpi.k-amber .bar-fill { background: var(--amber); }
+.kpi.k-warn .val       { color: var(--warn); }
+.kpi.k-alarm .val      { color: var(--alarm); }
+
+/* ---- Tabs ---- */
+.tabs {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.tab {
+  padding: 9px 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  user-select: none;
+  position: relative;
+  transition: color 0.15s;
+}
+.tab:hover { color: var(--text-2); }
+.tab.active { color: var(--text); }
+.tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: var(--amber);
+}
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ---- 数据 row ---- */
+.row {
+  display: grid;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 20px;
+}
+.row-4 { grid-template-columns: repeat(4, 1fr); }
+.row-2 { grid-template-columns: 1fr 1fr; }
+.row > .cell {
+  padding: 14px 16px;
+  border-right: 1px solid var(--rule);
+}
+.row > .cell:last-child { border-right: none; }
+.cell .label {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 9px;
+  font-weight: 500;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.cell .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cell .num-unit { font-family: -apple-system, sans-serif; font-size: 10px; color: var(--text-3); margin-left: 4px; }
+.cell .note { font-size: 10px; color: var(--text-3); margin-top: 8px; letter-spacing: 0.02em; }
+.cell .kv-row {
+  display: flex; justify-content: space-between;
+  font-size: 11px; padding: 3px 0;
+}
+.cell .kv-row .k { color: var(--text-3); letter-spacing: 0.04em; }
+.cell .kv-row .v {
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.cell h4 {
+  font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-2);
+  margin-bottom: 10px;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.cell .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---- Charts ---- */
+.chart-row {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  margin-bottom: 20px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.chart-row-2 { grid-template-columns: 1fr 1fr; }
+.chart {
+  background: var(--bg);
+  padding: 14px 16px 16px 16px;
+  position: relative;
+}
+.chart .chart-head {
+  display: flex; align-items: baseline;
+  margin-bottom: 10px;
+}
+.chart .chart-head h3 {
+  font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.chart .chart-head .legend {
+  margin-left: auto;
+  display: flex; gap: 16px;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.chart .chart-head .legend span { display: flex; align-items: center; gap: 7px; }
+.chart .chart-head .legend .dot-legend { width: 16px; height: 1px; display: inline-block; }
+.chart .chart-body      { position: relative; height: 150px; }
+.chart .chart-body-tall { position: relative; height: 170px; }
+.chart canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+.tooltip {
+  position: absolute; pointer-events: none;
+  background: var(--tt-bg);
+  border: 1px solid var(--rule-2);
+  padding: 8px 12px;
+  font-size: 11px; line-height: 1.65;
+  display: none;
+  z-index: 10; white-space: nowrap;
+  border-radius: 0;
+  box-shadow: 0 0 0 0 transparent;
+}
+.tooltip .tt-time { color: var(--text-3); margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; }
+.tooltip .tt-row { display: flex; gap: 10px; align-items: center; }
+.tooltip .tt-dot { width: 10px; height: 1px; flex-shrink: 0; }
+.tooltip .tt-val { font-family: 'JetBrains Mono', monospace; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ---- Table ---- */
+.table-wrap {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 20px;
+}
+.table-head {
+  padding: 10px 0 9px 0;
+  display: flex; align-items: baseline; gap: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.table-head h3 {
+  font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.table-head .meta {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th {
+  text-align: left;
+  color: var(--text-3);
+  padding: 8px 12px 7px 12px;
+  font-weight: 500;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+  position: sticky; top: 0;
+}
+.tbl th:first-child { padding-left: 0; }
+.tbl th:last-child  { padding-right: 0; text-align: right; }
+.tbl td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text);
+}
+.tbl td:first-child { padding-left: 0; color: var(--text-3); }
+.tbl td:last-child  { padding-right: 0; text-align: right; }
+.tbl tbody tr:last-child td { border-bottom: none; }
+.tbl tbody tr.highlight td { color: var(--amber); }
+.tbl .v-warn { color: var(--alarm); }
+.tbl .v-dim  { color: var(--text-3); }
+
+/* ---- 4 轮卡片 ---- */
+.round-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 20px;
+}
+.round-card {
+  padding: 14px 16px;
+  border-right: 1px solid var(--rule);
+}
+.round-card:last-child { border-right: none; }
+.round-card .name {
+  font-family: 'Newsreader', 'Source Serif Pro', 'PT Serif', Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--text-2);
+  margin-bottom: 2px;
+}
+.round-card .key {
+  font-size: 9px;
+  color: var(--text-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.round-card .big {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.round-card .pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  letter-spacing: 0.04em;
+}
+.round-card .pct span {
+  border-left: 1px solid var(--rule);
+  padding-left: 8px;
+}
+.round-card .pct span:first-child { border-left: none; padding-left: 0; }
+.round-card .pct b { color: var(--text); font-weight: 400; }
+.round-card .meta {
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+}
+
+/* ---- 分布柱 ---- */
+.dist { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.dist .item {
+  display: grid;
+  grid-template-columns: 60px 1fr 40px;
+  gap: 10px;
+  align-items: center;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.dist .item .rng { color: var(--text-3); letter-spacing: 0.04em; }
+.dist .item .barbox { background: var(--rule); height: 5px; overflow: hidden; }
+.dist .item .barfill { height: 100%; background: var(--text-2); transition: width 0.5s, background 0.2s; }
+.dist .item:hover .barfill { background: var(--amber); }
+.dist .item .cnt { color: var(--text); text-align: right; }
+
+/* ---- Throttle timeline ---- */
+.tl { max-height: 280px; overflow-y: auto; }
+.tl-row {
+  display: grid;
+  grid-template-columns: 80px 100px 1fr;
+  gap: 14px;
+  padding: 7px 0;
+  font-size: 11px;
+  border-bottom: 1px solid var(--rule);
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.tl-row:last-child { border-bottom: none; }
+.tl-row .t { color: var(--text-3); }
+.tl-row .ch { color: var(--text); }
+.tl-row .ch.up { color: var(--good); }
+.tl-row .ch.down { color: var(--warn); }
+.tl-row .reason { color: var(--text-3); }
+.tl-empty {
+  padding: 14px 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-family: 'Newsreader', Georgia, serif;
+  font-style: italic;
+}
+
+/* ---- 主题切换 ---- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+.theme-toggle button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-3);
+  font-family: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  transition: color 0.15s;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+}
+.theme-toggle button:hover { color: var(--text-2); }
+.theme-toggle button.active {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
+.theme-toggle .sep { color: var(--text-4); }
+
+/* ---- 窗口选择 ---- */
+.window-sel {
+  display: flex;
+  gap: 22px;
+  margin-bottom: 18px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.window-sel button {
+  background: none;
+  border: none;
+  padding: 5px 0;
+  color: var(--text-3);
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.window-sel button:hover { color: var(--text-2); }
+.window-sel button.active {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
+
+/* ---- 色 ---- */
+.amber  { color: var(--amber) !important; }
+.warn   { color: var(--warn) !important; }
+.alarm  { color: var(--alarm) !important; }
+.good   { color: var(--good) !important; }
+.text-2 { color: var(--text-2) !important; }
+.text-3 { color: var(--text-3) !important; }
+
+/* ---- 响应式 ---- */
+@media (max-width: 1200px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .kpi { border-bottom: 1px solid var(--rule); }
+  .kpi:nth-child(3n) { border-right: none; }
+  .kpi:nth-last-child(-n+3) { border-bottom: none; }
+  .row-4 { grid-template-columns: repeat(2, 1fr); }
+  .row-4 > .cell:nth-child(2n) { border-right: none; }
+  .row-4 > .cell:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+  .round-row { grid-template-columns: repeat(2, 1fr); }
+  .round-card:nth-child(2n) { border-right: none; }
+  .round-card:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (max-width: 720px) {
+  body { padding: 24px 20px 40px 20px; }
+  .header { flex-wrap: wrap; gap: 12px; }
+  .header .right { width: 100%; margin-left: 0; gap: 16px; }
+  .header h1 { font-size: 22px; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .kpi { padding: 18px 14px; }
+  .kpi .val { font-size: 26px; }
+  .row-2, .chart-row-2 { grid-template-columns: 1fr; }
+  .row-2 > .cell:first-child, .chart-row-2 > .chart:first-child { border-right: none; border-bottom: 1px solid var(--rule); }
+  .tabs { gap: 22px; overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Resume Scoring System</h1>
+  <span class="ver">v0.31 / Monitor</span>
+  <span class="status">
+    <span id="statusDot" class="dot dot-idle"></span>
+    <span id="statusText">连接中</span>
+  </span>
+  <span class="right">
+    <span class="theme-toggle">
+      <button data-theme="dark" class="active">DARK</button>
+      <span class="sep">·</span>
+      <button data-theme="light">LIGHT</button>
+    </span>
+    <span><span class="label">每</span><span class="v">2s</span></span>
+    <span><span class="label">同步</span><span class="v" id="updateTime">—</span></span>
+    <span><span class="label">运行</span><span class="v" id="uptime">—</span></span>
+  </span>
+</div>
+
+<!-- KPI 顶部 -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="lbl">吞吐</div>
+    <div class="val" id="kpiThroughput">—<span class="unit">条/分</span></div>
+    <div class="sub" id="kpiThroughputSub">—</div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">单条简历</div>
+    <div class="val" id="kpiResume">—<span class="unit">s</span></div>
+    <div class="sub" id="kpiResumeSub">R1 + R2 + R3 + R4</div>
+  </div>
+  <div class="kpi k-amber">
+    <div class="lbl">网关容量</div>
+    <div class="val" id="kpiCap">—</div>
+    <div class="sub" id="kpiCapSub">—</div>
+    <div class="bar-wrap"><div class="bar-fill" id="kpiCapBar" style="width:0%"></div></div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">vLLM 在跑</div>
+    <div class="val" id="kpiRunning">—</div>
+    <div class="sub" id="kpiRunningSub">—</div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">KV Cache</div>
+    <div class="val" id="kpiKv">—<span class="unit">%</span></div>
+    <div class="sub" id="kpiKvSub">—</div>
+    <div class="bar-wrap"><div class="bar-fill" id="kpiKvBar" style="width:0%"></div></div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">Preemption</div>
+    <div class="val" id="kpiPreempt">—</div>
+    <div class="sub" id="kpiPreemptSub">累计</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" data-tab="overview">概览</div>
+  <div class="tab" data-tab="resume">简历统计</div>
+  <div class="tab" data-tab="throttle">限流网关</div>
+  <div class="tab" data-tab="vllm">vLLM / GPU</div>
+</div>
+
+<!-- ============================================================
+     概览
+     ============================================================ -->
+<div class="panel active" id="panel-overview">
+  <div class="chart-row chart-row-2">
+    <div class="chart">
+      <div class="chart-head">
+        <h3>Concurrency &amp; KV Cache</h3>
+        <span class="legend">
+          <span><span class="dot-legend" style="background:#e9e6df"></span>Running</span>
+          <span><span class="dot-legend" style="background:#9c3c2b"></span>Waiting</span>
+          <span><span class="dot-legend" style="background:#c89a3a"></span>KV%</span>
+        </span>
+      </div>
+      <div class="chart-body"><canvas id="ctxConcurrency"></canvas></div>
+      <div class="tooltip" id="ttConcurrency"></div>
+    </div>
+    <div class="chart">
+      <div class="chart-head">
+        <h3>Throughput · tokens / sec</h3>
+        <span class="legend">
+          <span><span class="dot-legend" style="background:#5a5752"></span>Prompt</span>
+          <span><span class="dot-legend" style="background:#e9e6df"></span>Generation</span>
+        </span>
+      </div>
+      <div class="chart-body"><canvas id="ctxThroughput"></canvas></div>
+      <div class="tooltip" id="ttThroughput"></div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-head">
+      <h3>Recent activity</h3>
+      <span class="meta">vLLM 日志解析 · 最近 25 行</span>
+    </div>
+    <div style="max-height:320px;overflow-y:auto;">
+      <table class="tbl">
+        <thead><tr><th>Time</th><th>Run</th><th>Wait</th><th>Prompt</th><th>Gen</th><th>KV</th><th>Prefix</th></tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     简历统计
+     ============================================================ -->
+<div class="panel" id="panel-resume">
+  <div class="window-sel">
+    <button data-window="5m">5 min</button>
+    <button data-window="10m" class="active">10 min</button>
+    <button data-window="30m">30 min</button>
+    <button data-window="1h">1 hour</button>
+    <button data-window="50">N = 50</button>
+    <button data-window="100">N = 100</button>
+    <button data-window="500">N = 500</button>
+  </div>
+
+  <div class="row row-4">
+    <div class="cell">
+      <div class="label">完成简历 <span class="badge" id="resumeWinLbl">10m</span></div>
+      <div class="num" id="resumeTotal">—</div>
+      <div class="kv-row" style="margin-top:14px"><span class="k">R4 调用</span><span class="v" id="resumeCallR4">—</span></div>
+    </div>
+    <div class="cell">
+      <div class="label">吞吐</div>
+      <div class="num amber" id="resumeThroughput">—<span class="num-unit">/min</span></div>
+      <div class="kv-row" style="margin-top:14px"><span class="k">窗口</span><span class="v" id="resumeSpan">— s</span></div>
+    </div>
+    <div class="cell">
+      <div class="label">单条简历</div>
+      <div class="num" id="resumeFull">—<span class="num-unit"> s</span></div>
+      <div class="note">R1 + R2 + R3 + R4 均值之和</div>
+    </div>
+    <div class="cell">
+      <div class="label">5000 份预估</div>
+      <div class="num" id="resumeEta5k">—</div>
+      <div class="note">按当前吞吐外推</div>
+    </div>
+  </div>
+
+  <div class="round-row" id="roundGrid"></div>
+
+  <div class="chart-row chart-row-2">
+    <div class="chart">
+      <div class="chart-head"><h3>R1 信息提取 — 耗时分布</h3></div>
+      <div class="dist" id="distR1"></div>
+    </div>
+    <div class="chart">
+      <div class="chart-head"><h3>R4 逐项打分 — 耗时分布</h3></div>
+      <div class="dist" id="distR4"></div>
+    </div>
+  </div>
+
+  <div class="chart" style="border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); margin-bottom:20px;">
+    <div class="chart-head"><h3>R1 每分钟到达数</h3></div>
+    <div class="chart-body-tall"><canvas id="ctxPerMinute"></canvas></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     限流网关
+     ============================================================ -->
+<div class="panel" id="panel-throttle">
+  <div class="row row-4">
+    <div class="cell">
+      <div class="label">当前容量</div>
+      <div class="num amber" id="gwCap">—</div>
+      <div class="kv-row" style="margin-top:14px"><span class="k">范围</span><span class="v" id="gwCapRange">—</span></div>
+    </div>
+    <div class="cell">
+      <div class="label">in-flight</div>
+      <div class="num" id="gwRun">—</div>
+      <div class="note">正在转发到 server.js</div>
+    </div>
+    <div class="cell">
+      <div class="label">排队中</div>
+      <div class="num" id="gwWait">—</div>
+      <div class="note">超出容量后等待</div>
+    </div>
+    <div class="cell">
+      <div class="label">已服务</div>
+      <div class="num" id="gwServed">—</div>
+      <div class="kv-row" style="margin-top:14px"><span class="k">uptime</span><span class="v" id="gwUptime">—</span></div>
+    </div>
+  </div>
+
+  <div class="row row-2">
+    <div class="cell">
+      <h4>排队时长 <span class="badge" id="gwWindowLbl">最近 5 分钟</span></h4>
+      <div class="kv-row"><span class="k">最近平均</span><span class="v" id="gwRecentAvgQ">—</span></div>
+      <div class="kv-row"><span class="k">最近最长</span><span class="v amber" id="gwRecentMaxQ">—</span></div>
+      <div class="kv-row"><span class="k">累计排过队</span><span class="v" id="gwQueued">—</span></div>
+      <div class="kv-row"><span class="k">累计被拒 (503)</span><span class="v" id="gwRejected">—</span></div>
+      <div class="kv-row" style="border-top:1px solid var(--rule); margin-top:10px; padding-top:10px">
+        <span class="k">历史峰值</span><span class="v text-3" id="gwMaxQ">—</span>
+      </div>
+    </div>
+    <div class="cell">
+      <h4>vLLM 健康度</h4>
+      <div class="kv-row"><span class="k">KV Cache</span><span class="v" id="gwKv">—</span></div>
+      <div class="kv-row"><span class="k">Preemption 累计</span><span class="v" id="gwPreempt">—</span></div>
+      <div class="kv-row"><span class="k">Prefix 命中率</span><span class="v" id="gwPrefix">—</span></div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-head">
+      <h3>自适应调节</h3>
+      <span class="meta">最近 30 次容量变化</span>
+    </div>
+    <div class="tl" id="gwTimeline"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     vLLM / GPU
+     ============================================================ -->
+<div class="panel" id="panel-vllm">
+  <div class="row row-4" id="gpuCards"></div>
+  <div class="row row-4" id="vllmCards"></div>
+</div>
+
+<script>
+/* =================== 状态 + 工具 =================== */
+var MAX_POINTS = 80;
+var HOST = location.hostname || '127.0.0.1';
+var FROM_API_PORT = (location.port === '3101');
+var MONITOR_API = FROM_API_PORT ? '' : (location.protocol + '//' + HOST + ':3101');
+
+var startTime = Date.now();
+var historyData = { times: [], running: [], waiting: [], prompt: [], gen: [], kvCache: [], prefixHit: [] };
+var currentTab = 'overview';
+var currentWindow = '10m';
+var lastResumeFetchAt = 0;
+
+/* 调色板: 从 CSS variable 动态读取, 主题切换后会刷新 */
+var C = {};
+function refreshPalette() {
+  var css = getComputedStyle(document.documentElement);
+  function g(name, key) { C[key] = css.getPropertyValue('--' + name).trim(); }
+  g('text',   'text');
+  g('text-2', 'text2');
+  g('text-3', 'text3');
+  g('text-4', 'text4');
+  g('rule',   'rule');
+  g('amber',  'amber');
+  g('warn',   'warn');
+  g('alarm',  'alarm');
+  g('good',   'good');
+}
+refreshPalette();
+
+/* 主题切换 */
+function setTheme(t) {
+  if (t !== 'light' && t !== 'dark') t = 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('monitor.theme', t); } catch (e) {}
+  document.querySelectorAll('.theme-toggle button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.theme === t);
+  });
+  refreshPalette();
+  // 立即重绘 canvas (CSS 元素已经自动更新, canvas 不能用 CSS 所以要手动)
+  if (typeof redrawCharts === 'function') redrawCharts();
+}
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('monitor.theme'); } catch (e) {}
+  setTheme(saved || 'dark');
+  document.querySelectorAll('.theme-toggle button').forEach(function (b) {
+    b.onclick = function () { setTheme(b.dataset.theme); };
+  });
+})();
+
+function fmt(n, d) { if (d === undefined) d = 0; return Number(n || 0).toFixed(d); }
+function fmtMs(ms) {
+  if (!ms || ms < 0) return '0 ms';
+  if (ms < 1000) return Math.round(ms) + ' ms';
+  return (ms / 1000).toFixed(1) + ' s';
+}
+function fmtMinutes(min) {
+  if (min < 60) return Math.round(min) + ' min';
+  var h = Math.floor(min / 60); var m = Math.round(min % 60);
+  return h + ' h ' + (m ? m + ' min' : '');
+}
+function $(id) { return document.getElementById(id); }
+
+/* =================== Tab =================== */
+document.querySelectorAll('.tab').forEach(function (t) {
+  t.onclick = function () {
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('active'); });
+    t.classList.add('active');
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+    $('panel-' + t.dataset.tab).classList.add('active');
+    currentTab = t.dataset.tab;
+    if (currentTab === 'resume') refreshResume();
+  };
+});
+
+document.querySelectorAll('.window-sel button').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('.window-sel button').forEach(function (x) { x.classList.remove('active'); });
+    b.classList.add('active');
+    currentWindow = b.dataset.window;
+    refreshResume();
+  };
+});
+
+/* =================== Canvas 工具 (DPR + 固定容器) =================== */
+function setupCanvas(canvas) {
+  var dpr = window.devicePixelRatio || 1;
+  var cssW = canvas.clientWidth;
+  var cssH = canvas.clientHeight;
+  if (cssW < 50 || cssH < 50) return null;
+  var needW = Math.round(cssW * dpr);
+  var needH = Math.round(cssH * dpr);
+  if (canvas.width !== needW)  canvas.width  = needW;
+  if (canvas.height !== needH) canvas.height = needH;
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  return {ctx: ctx, W: cssW, H: cssH};
+}
+
+/* =================== 折线图 =================== */
+function drawLine(canvasId, tooltipId, times, seriesArr, colors, formatter) {
+  var canvas = $(canvasId);
+  var tooltip = $(tooltipId);
+  if (!canvas) return;
+  var setup = setupCanvas(canvas);
+  if (!setup) return;
+  var ctx = setup.ctx, W = setup.W, H = setup.H;
+  var pad = { top: 12, right: 14, bottom: 28, left: 46 };
+  var pw = W - pad.left - pad.right;
+  var ph = H - pad.top - pad.bottom;
+
+  // 网格 (极淡)
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+  for (var i = 0; i <= 4; i++) {
+    var gy = pad.top + (ph / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(W - pad.right, gy); ctx.stroke();
+  }
+
+  var allMax = 0;
+  for (var si = 0; si < seriesArr.length; si++) {
+    if (seriesArr[si] && seriesArr[si].length) {
+      var m = Math.max.apply(null, seriesArr[si]);
+      if (m > allMax) allMax = m;
+    }
+  }
+  if (allMax === 0) allMax = 1;
+
+  // Y 标签
+  ctx.fillStyle = C.text3;
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+  for (var i = 0; i <= 4; i++) {
+    var val = allMax * (1 - i / 4);
+    var gy = pad.top + (ph / 4) * i;
+    ctx.fillText(allMax >= 100 ? Math.round(val) : val.toFixed(1), pad.left - 8, gy + 3.5);
+  }
+
+  var allPoints = [];
+  for (var si = 0; si < seriesArr.length; si++) {
+    var data = seriesArr[si];
+    if (!data || data.length < 1) continue;
+
+    ctx.strokeStyle = colors[si];
+    ctx.lineWidth = 1.4;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    // 线 (不再用渐变填充, 保持克制)
+    ctx.beginPath();
+    for (var j = 0; j < data.length; j++) {
+      var x = pad.left + (data.length > 1 ? (j / (data.length - 1)) * pw : pw / 2);
+      var y = pad.top + ph - (data[j] / allMax) * ph;
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      allPoints.push({ x: x, y: y, si: si, di: j });
+    }
+    ctx.stroke();
+  }
+
+  // X 标签
+  ctx.fillStyle = C.text3;
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  if (times.length > 0) {
+    var step = Math.max(1, Math.floor(times.length / 5));
+    for (var j = 0; j < times.length; j += step) {
+      var lx = pad.left + (times.length > 1 ? (j / (times.length - 1)) * pw : pw / 2);
+      ctx.fillText(times[j], lx, pad.top + ph + 18);
+    }
+  }
+
+  // hover
+  canvas.onmousemove = function (e) {
+    var cr = canvas.getBoundingClientRect();
+    var mx = e.clientX - cr.left;
+    var nearest = null, minDx = 1e9;
+    for (var i = 0; i < allPoints.length; i++) {
+      var dx = Math.abs(allPoints[i].x - mx);
+      if (dx < minDx) { minDx = dx; nearest = allPoints[i]; }
+    }
+    if (nearest && minDx < 40) {
+      var tipX = nearest.x + 14; var tipY = nearest.y - 56;
+      if (tipX + 200 > W) tipX = nearest.x - 200;
+      if (tipY < 0) tipY = nearest.y + 18;
+      tooltip.style.left = tipX + 'px';
+      tooltip.style.top = tipY + 'px';
+      tooltip.style.display = 'block';
+      var html = '<div class="tt-time">' + (times[nearest.di] || '') + '</div>';
+      for (var si = 0; si < seriesArr.length; si++) {
+        var v = seriesArr[si] && seriesArr[si][nearest.di];
+        if (v !== null && v !== undefined) {
+          html += '<div class="tt-row"><span class="tt-dot" style="background:' + colors[si] + '"></span><span class="tt-val">' + formatter(v, si) + '</span></div>';
+        }
+      }
+      tooltip.innerHTML = html;
+    } else {
+      tooltip.style.display = 'none';
+    }
+  };
+  canvas.onmouseleave = function () { tooltip.style.display = 'none'; };
+}
+
+/* =================== 柱状图 =================== */
+function drawBar(canvasId, labels, values) {
+  var canvas = $(canvasId);
+  if (!canvas) return;
+  var setup = setupCanvas(canvas);
+  if (!setup) return;
+  var ctx = setup.ctx, W = setup.W, H = setup.H;
+  var pad = { top: 14, right: 14, bottom: 30, left: 40 };
+  var pw = W - pad.left - pad.right;
+  var ph = H - pad.top - pad.bottom;
+
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+  for (var i = 0; i <= 4; i++) {
+    var gy = pad.top + (ph / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(W - pad.right, gy); ctx.stroke();
+  }
+
+  var maxV = Math.max.apply(null, values.length ? values : [1]); if (!maxV) maxV = 1;
+
+  ctx.fillStyle = C.text3;
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+  for (var i = 0; i <= 4; i++) {
+    var v = Math.round(maxV * (1 - i / 4));
+    var gy = pad.top + (ph / 4) * i;
+    ctx.fillText(v, pad.left - 8, gy + 3.5);
+  }
+
+  var n = values.length;
+  if (n === 0) {
+    ctx.fillStyle = C.text3;
+    ctx.font = 'italic 12px "Newsreader", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', W/2, H/2);
+    return;
+  }
+  var barW = pw / n * 0.72;
+  for (var i = 0; i < n; i++) {
+    var h = (values[i] / maxV) * ph;
+    var x = pad.left + (pw / n) * i + ((pw / n) - barW) / 2;
+    var y = pad.top + ph - h;
+    ctx.fillStyle = C.text2;
+    ctx.fillRect(x, y, barW, h);
+    if (h > 14) {
+      ctx.fillStyle = C.text3;
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(values[i], x + barW / 2, y - 4);
+    }
+  }
+  ctx.fillStyle = C.text3;
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  var skip = Math.max(1, Math.floor(n / 10));
+  for (var i = 0; i < n; i += skip) {
+    var x = pad.left + (pw / n) * i + (pw / n) / 2;
+    ctx.fillText((labels[i] || '').slice(-5), x, pad.top + ph + 18);
+  }
+}
+
+/* =================== 拉取 =================== */
+function fetchMonitor() {
+  return fetch('/api/monitor').then(function (r) { return r.json(); });
+}
+function fetchAll() {
+  return Promise.all([
+    fetch(MONITOR_API + '/stats/throttle').then(r => r.json()).catch(e => ({error: e.message})),
+    fetch(MONITOR_API + '/stats/vllm').then(r => r.json()).catch(e => ({error: e.message})),
+  ]);
+}
+function fetchResume(window) {
+  return fetch(MONITOR_API + '/stats/resume?window=' + encodeURIComponent(window))
+    .then(r => r.json())
+    .catch(e => ({error: e.message}));
+}
+
+/* =================== 简历 tab =================== */
+function refreshResume() {
+  $('resumeWinLbl').textContent = currentWindow;
+  fetchResume(currentWindow).then(function (d) {
+    if (!d || d.error) return;
+    $('resumeTotal').textContent = d.totalResumes;
+    $('resumeCallR4').textContent = (d.totalCalls && d.totalCalls.r4) || 0;
+    $('resumeThroughput').innerHTML = d.throughputPerMin + '<span class="num-unit">/min</span>';
+    $('resumeSpan').textContent = (d.windowSec || 0) + ' s';
+    $('resumeFull').innerHTML = d.fullResumeAvg + '<span class="num-unit"> s</span>';
+    $('resumeEta5k').textContent = d.throughputPerMin > 0 ? fmtMinutes(5000 / d.throughputPerMin) : '∞';
+
+    // 4 轮
+    var roundLabels = { r1: 'R1', r2: 'R2', r3: 'R3', r4: 'R4' };
+    var roundDescs  = {
+      r1: '信息提取',
+      r2: '产品匹配',
+      r3: '职能匹配',
+      r4: '逐项打分',
+    };
+    var html = '';
+    ['r1', 'r2', 'r3', 'r4'].forEach(function (k) {
+      var s = (d.perRound && d.perRound[k]) || {};
+      html += '<div class="round-card">' +
+        '<div class="name">' + roundDescs[k] + '</div>' +
+        '<div class="key">' + roundLabels[k] + ' · N=' + (s.n || 0) + '</div>' +
+        '<div class="big">' + (s.avg || 0) + '<span class="num-unit"> s</span></div>' +
+        '<div class="pct">' +
+          '<span>P50 <b>' + (s.p50 || 0) + 's</b></span>' +
+          '<span>P90 <b>' + (s.p90 || 0) + 's</b></span>' +
+          '<span>P99 <b>' + (s.p99 || 0) + 's</b></span>' +
+        '</div>' +
+        '<div class="meta">avg out · ' + (s.avgTok || 0) + ' tok · max ' + (s.max || 0) + ' s</div>' +
+      '</div>';
+    });
+    $('roundGrid').innerHTML = html;
+
+    // 分布
+    function distHtml(s) {
+      if (!s || !s.distribution) return '<div style="color:var(--text-3);font-size:11px;font-style:italic;font-family:Newsreader,Georgia,serif;padding:8px 0">暂无数据</div>';
+      var total = s.distribution.reduce(function (a, b) { return a + b.count; }, 0) || 1;
+      return s.distribution.map(function (b) {
+        var pct = (b.count / total * 100).toFixed(0);
+        return '<div class="item">' +
+          '<span class="rng">' + b.range + '</span>' +
+          '<div class="barbox"><div class="barfill" style="width:' + pct + '%"></div></div>' +
+          '<span class="cnt">' + b.count + '</span>' +
+        '</div>';
+      }).join('');
+    }
+    $('distR1').innerHTML = distHtml(d.perRound && d.perRound.r1);
+    $('distR4').innerHTML = distHtml(d.perRound && d.perRound.r4);
+
+    var labels = (d.perMinute || []).map(function (x) { return x.time; });
+    var values = (d.perMinute || []).map(function (x) { return x.count; });
+    window._lastPerMinute = {labels: labels, values: values};
+    drawBar('ctxPerMinute', labels, values);
+  });
+}
+
+/* 主题切换时立刻重绘 canvas (CSS 元素自动跟随变量) */
+function redrawCharts() {
+  if (historyData.times.length) {
+    var T = historyData.times.slice(-MAX_POINTS);
+    drawLine('ctxConcurrency', 'ttConcurrency', T,
+      [historyData.running.slice(-MAX_POINTS), historyData.waiting.slice(-MAX_POINTS), historyData.kvCache.slice(-MAX_POINTS)],
+      [C.text, C.alarm, C.amber],
+      function (v, si) { return si === 2 ? fmt(v, 1) + ' %' : Math.round(v) + ' reqs'; });
+    drawLine('ctxThroughput', 'ttThroughput', T,
+      [historyData.prompt.slice(-MAX_POINTS), historyData.gen.slice(-MAX_POINTS)],
+      [C.text3, C.text],
+      function (v) { return Math.round(v) + ' tok/s'; });
+  }
+  if (window._lastPerMinute) {
+    drawBar('ctxPerMinute', window._lastPerMinute.labels, window._lastPerMinute.values);
+  }
+}
+
+/* =================== KPI + 限流 + vLLM =================== */
+function refreshKpi(throttle, vllm, mon) {
+  var resumeData = window._lastResume || {};
+
+  if (resumeData.throughputPerMin !== undefined) {
+    $('kpiThroughput').innerHTML = resumeData.throughputPerMin + '<span class="unit">条/分</span>';
+    $('kpiThroughputSub').textContent = (resumeData.totalResumes || 0) + ' 条 · ' + (resumeData.window || '');
+  }
+  if (resumeData.fullResumeAvg !== undefined && resumeData.fullResumeAvg > 0) {
+    $('kpiResume').innerHTML = resumeData.fullResumeAvg + '<span class="unit">s</span>';
+  }
+
+  if (throttle && !throttle.error) {
+    $('kpiCap').textContent = throttle.capacity;
+    $('kpiCapSub').textContent = 'run ' + throttle.running + ' · wait ' + throttle.waiting;
+    var capPct = throttle.capacity / (throttle.maxCapacity || 40) * 100;
+    $('kpiCapBar').style.width = capPct + '%';
+
+    $('gwCap').textContent = throttle.capacity;
+    $('gwCapRange').textContent = throttle.minCapacity + ' — ' + throttle.maxCapacity;
+    $('gwRun').textContent = throttle.running;
+    $('gwWait').textContent = throttle.waiting + (throttle.maxWaiting ? (' / ' + throttle.maxWaiting) : '');
+    $('gwServed').textContent = throttle.totalServed;
+    var u = throttle.uptimeSec || 0;
+    $('gwUptime').textContent = Math.floor(u / 3600) + 'h ' + Math.floor((u % 3600) / 60) + 'm';
+    $('gwQueued').textContent = throttle.totalQueued + ' 次';
+    var rejTxt = (throttle.totalRejected || 0) + ' 次';
+    $('gwRejected').textContent = rejTxt;
+    $('gwRejected').style.color = throttle.totalRejected > 0 ? 'var(--warn)' : 'var(--text)';
+    if (throttle.queueWindowMs) {
+      $('gwWindowLbl').textContent = '最近 ' + Math.round(throttle.queueWindowMs / 60000) + ' 分钟';
+    }
+    $('gwRecentAvgQ').textContent = fmtMs(throttle.recentAvgQueueMs || 0) + ' · n=' + (throttle.recentQueueCount || 0);
+    $('gwRecentMaxQ').textContent = fmtMs(throttle.recentMaxQueueMs || 0);
+    $('gwMaxQ').textContent = fmtMs(throttle.maxQueueMs);
+
+    // timeline
+    var tl = '';
+    (throttle.history || []).slice().reverse().forEach(function (h) {
+      var t = new Date(h.t).toTimeString().slice(0, 8);
+      var diff = h.to - h.from;
+      var arrow = diff > 0 ? '↑' : '↓';
+      var cls = diff > 0 ? 'up' : 'down';
+      tl += '<div class="tl-row">' +
+        '<span class="t">' + t + '</span>' +
+        '<span class="ch ' + cls + '">' + h.from + ' ' + arrow + ' ' + h.to + '</span>' +
+        '<span class="reason">' + h.reason + '</span>' +
+      '</div>';
+    });
+    $('gwTimeline').innerHTML = tl || '<div class="tl-empty">尚无调节记录</div>';
+  } else {
+    $('kpiCap').textContent = 'N/A';
+    $('kpiCapSub').textContent = '网关离线';
+  }
+
+  if (vllm && !vllm.error) {
+    $('kpiRunning').textContent = vllm.running;
+    $('kpiRunningSub').textContent = 'waiting · ' + vllm.waiting;
+
+    var kvPct = vllm.kvUsage * 100;
+    $('kpiKv').innerHTML = kvPct.toFixed(1) + '<span class="unit">%</span>';
+    $('kpiKvBar').style.width = kvPct + '%';
+    var kvColor, kvNote;
+    if (kvPct > 80)      { kvColor = C.alarm; kvNote = '溢出风险'; }
+    else if (kvPct > 60) { kvColor = C.warn;  kvNote = '高位';     }
+    else                 { kvColor = C.good;  kvNote = '健康';     }
+    $('kpiKv').style.color = kvColor;
+    $('kpiKvBar').style.background = kvColor;
+    $('kpiKvSub').textContent = kvNote;
+
+    $('kpiPreempt').textContent = vllm.preemptions;
+    if (window._lastPreempt !== undefined) {
+      var diff = vllm.preemptions - window._lastPreempt;
+      $('kpiPreemptSub').textContent = diff > 0 ? ('+' + diff + ' (上轮)') : '稳定';
+      $('kpiPreemptSub').style.color = diff > 0 ? C.alarm : C.text3;
+    }
+    window._lastPreempt = vllm.preemptions;
+
+    $('gwKv').textContent = kvPct.toFixed(1) + ' %';
+    $('gwKv').style.color = kvColor;
+    $('gwPreempt').textContent = vllm.preemptions;
+    var prefixRate = vllm.prefixCacheQueries > 0
+      ? (vllm.prefixCacheHits / vllm.prefixCacheQueries * 100).toFixed(1) + ' %'
+      : '—';
+    $('gwPrefix').textContent = prefixRate;
+  }
+
+  // 状态指示
+  var live = mon && (mon.now.running > 0 || (throttle && throttle.running > 0));
+  var warn = vllm && !vllm.error && (vllm.kvUsage * 100) > 75;
+  $('statusDot').className = 'dot ' + (warn ? 'dot-warn' : (live ? 'dot-live' : 'dot-idle'));
+  $('statusText').textContent = warn ? '高负载 · KV 偏高' : (live ? '处理中' : '空闲');
+}
+
+/* =================== 主刷新 =================== */
+function update() {
+  var now = new Date();
+  $('updateTime').textContent = now.toLocaleTimeString();
+  var elapsed = Math.floor((now - startTime) / 1000);
+  $('uptime').textContent = Math.floor(elapsed / 3600) + 'h ' + Math.floor((elapsed % 3600) / 60) + 'm';
+
+  Promise.all([fetchMonitor().catch(e => null), fetchAll()]).then(function (results) {
+    var mon = results[0];
+    var throttle = results[1][0];
+    var vllm = results[1][1];
+
+    if (mon) {
+      var g = mon.gpu, n = mon.now, h = mon.history || [];
+
+      // GPU 卡 (tab 4)
+      var gpuUtil = g.util;
+      var utilColor = gpuUtil > 80 ? C.alarm : gpuUtil > 50 ? C.warn : C.text;
+      $('gpuCards').innerHTML =
+        '<div class="cell">' +
+          '<div class="label">GPU 利用率</div>' +
+          '<div class="num" style="color:' + utilColor + '">' + fmt(gpuUtil, 0) + '<span class="num-unit"> %</span></div>' +
+          '<div class="kv-row" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:10px"><span class="k">峰值</span><span class="v">— —</span></div>' +
+        '</div>' +
+        '<div class="cell">' +
+          '<div class="label">显存</div>' +
+          '<div class="num">' + (g.memUsed / 1024).toFixed(1) + '<span class="num-unit"> GB</span></div>' +
+          '<div class="kv-row" style="margin-top:14px"><span class="k">剩余</span><span class="v">' + (g.memFree / 1024).toFixed(1) + ' GB</span></div>' +
+        '</div>' +
+        '<div class="cell">' +
+          '<div class="label">温度</div>' +
+          '<div class="num" style="color:' + (g.temp > 80 ? C.alarm : g.temp > 65 ? C.warn : C.text) + '">' + g.temp + '<span class="num-unit"> °C</span></div>' +
+        '</div>' +
+        '<div class="cell">' +
+          '<div class="label">功耗</div>' +
+          '<div class="num">' + fmt(g.power, 0) + '<span class="num-unit"> W</span></div>' +
+          '<div class="kv-row" style="margin-top:14px"><span class="k">/ 150 W</span><span class="v">' + (g.power / 150 * 100).toFixed(0) + ' %</span></div>' +
+        '</div>';
+
+      $('vllmCards').innerHTML =
+        '<div class="cell"><div class="label">Running</div><div class="num">' + (n.running || 0) + '</div></div>' +
+        '<div class="cell"><div class="label">Waiting</div><div class="num" style="color:' + (n.waiting > 0 ? C.alarm : C.text) + '">' + (n.waiting || 0) + '</div></div>' +
+        '<div class="cell"><div class="label">Gen 吞吐</div><div class="num">' + fmt(n.gen, 0) + '<span class="num-unit"> tok/s</span></div></div>' +
+        '<div class="cell"><div class="label">Prefix 命中</div><div class="num amber">' + fmt(n.prefixHit, 1) + '<span class="num-unit"> %</span></div></div>';
+
+      if (h.length > 0) {
+        historyData = { times: [], running: [], waiting: [], prompt: [], gen: [], kvCache: [], prefixHit: [] };
+        for (var i = 0; i < h.length; i++) {
+          historyData.times.push(h[i].time);
+          historyData.running.push(h[i].running);
+          historyData.waiting.push(h[i].waiting);
+          historyData.prompt.push(h[i].prompt);
+          historyData.gen.push(h[i].gen);
+          historyData.kvCache.push(h[i].kvCache);
+          historyData.prefixHit.push(h[i].prefixHit);
+        }
+      }
+
+      var T = historyData.times.slice(-MAX_POINTS);
+      drawLine('ctxConcurrency', 'ttConcurrency', T,
+        [historyData.running.slice(-MAX_POINTS), historyData.waiting.slice(-MAX_POINTS), historyData.kvCache.slice(-MAX_POINTS)],
+        [C.text, C.alarm, C.amber],
+        function (v, si) { return si === 2 ? fmt(v, 1) + ' %' : Math.round(v) + ' reqs'; });
+
+      drawLine('ctxThroughput', 'ttThroughput', T,
+        [historyData.prompt.slice(-MAX_POINTS), historyData.gen.slice(-MAX_POINTS)],
+        [C.text3, C.text],
+        function (v) { return Math.round(v) + ' tok/s'; });
+
+      // 表
+      var rows = '';
+      var start = Math.max(0, historyData.times.length - 25);
+      for (var i = start; i < historyData.times.length; i++) {
+        var isLast = (i === historyData.times.length - 1);
+        var waitCls = historyData.waiting[i] > 0 ? ' class="v-warn"' : '';
+        rows += '<tr' + (isLast ? ' class="highlight"' : '') + '>' +
+          '<td>' + historyData.times[i] + '</td>' +
+          '<td>' + historyData.running[i] + '</td>' +
+          '<td' + waitCls + '>' + historyData.waiting[i] + '</td>' +
+          '<td class="v-dim">' + fmt(historyData.prompt[i], 0) + '</td>' +
+          '<td>' + fmt(historyData.gen[i], 0) + '</td>' +
+          '<td>' + fmt(historyData.kvCache[i], 1) + '</td>' +
+          '<td>' + fmt(historyData.prefixHit[i], 1) + '</td>' +
+        '</tr>';
+      }
+      $('logBody').innerHTML = rows;
+    }
+
+    refreshKpi(throttle, vllm, mon);
+  }).catch(function (e) {
+    $('statusText').textContent = '连接失败';
+  });
+
+  // 简历数据每 10 秒拉一次
+  if (Date.now() - lastResumeFetchAt > 10000) {
+    lastResumeFetchAt = Date.now();
+    fetchResume('10m').then(function (d) {
+      if (d && !d.error) {
+        window._lastResume = d;
+        $('kpiThroughput').innerHTML = d.throughputPerMin + '<span class="unit">条/分</span>';
+        $('kpiThroughputSub').textContent = (d.totalResumes || 0) + ' 条 · ' + (d.window || '');
+        if (d.fullResumeAvg > 0) $('kpiResume').innerHTML = d.fullResumeAvg + '<span class="unit">s</span>';
+      } else {
+        $('kpiThroughputSub').textContent = '数据接口未响应';
+        $('kpiThroughputSub').style.color = 'var(--alarm)';
+      }
+    });
+  }
+}
+
+update();
+setInterval(update, 2000);
+</script>
+</body>
+</html>

@@ -9,9 +9,9 @@ import time
 from typing import Optional
 
 # API 配置
-API_BASE = "http://8.163.39.222:8000/v1"
-WEB_API_BASE = "http://8.163.39.222:3000"
-MODEL = "/root/vLLM/models/Qwen3-8B-FP8"
+API_BASE = "http://127.0.0.1:8000/v1"
+WEB_API_BASE = "http://127.0.0.1:3000"
+MODEL = "models/Qwen3-8B-AWQ"
 
 
 def load_test_cases(file_path: str = "/root/vLLM/test_cases.json"):

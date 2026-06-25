@@ -266,6 +266,41 @@
         .config-bar input:focus { border-color: var(--primary); }
         .config-bar input[type="number"] { width: 80px; }
 
+        /* Multi-round step cards */
+        .step-card {
+            border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px;
+            background: var(--card-bg); overflow: hidden; transition: all 0.3s;
+        }
+        .step-header {
+            padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--text);
+            background: var(--bg); display: flex; align-items: center; gap: 8px; cursor: pointer;
+        }
+        .step-num {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 50%; background: var(--primary);
+            color: #fff; font-size: 11px; font-weight: 700;
+        }
+        .step-status { margin-left: auto; font-size: 12px; font-weight: 500; }
+        .step-status.running { color: #f59e0b; }
+        .step-status.done { color: #22c55e; }
+        .step-status.error { color: #ef4444; }
+        .step-body {
+            padding: 12px 14px; font-size: 12px; color: var(--text-secondary);
+            max-height: 400px; overflow-y: auto; display: none; line-height: 1.6;
+            border-top: 1px solid var(--border);
+            scrollbar-width: thin;
+        }
+        .step-body::-webkit-scrollbar { width: 6px; }
+        .step-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .step-body::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+        .step-body.show { display: block; }
+        .step-body pre { white-space: pre-wrap; word-break: break-all; margin: 0; font-size: 12px; }
+        .step-json { background: var(--bg); padding: 8px; border-radius: 6px; margin-top: 6px; }
+        .step-json table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .step-json td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
+        .step-json td:first-child { font-weight: 600; color: var(--text); white-space: nowrap; width: 120px; }
+        .step-json td:last-child { color: var(--text-secondary); }
+
         @media (max-width: 900px) {
             #scoringPanel { flex-direction: column; }
             .result-container { min-height: 300px; }
@@ -354,13 +389,60 @@
             font-size: 14px; color: var(--text-secondary); font-weight: 600; flex-shrink: 0;
             margin-bottom: 4px;
         }
+
+        /* ========== Semantic Mappings ========== */
+        .semantic-wrapper { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .semantic-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-shrink: 0; }
+        .semantic-subtabs { display: flex; gap: 4px; margin-bottom: 20px; flex-shrink: 0; }
+        .semantic-subtab { padding: 7px 20px; border: none; background: #f1f5f9; color: var(--text-secondary); cursor: pointer; font-size: 13px; font-weight: 600; border-radius: 20px; transition: all 0.2s; font-family: inherit; }
+        .semantic-subtab:hover { background: #e2e8f0; color: var(--text); }
+        .semantic-subtab.active { background: var(--gradient); color: #fff; }
+        .semantic-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .semantic-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-shrink: 0; }
+        .semantic-section-header h3 { font-size: 14px; color: var(--text); font-weight: 600; margin: 0; }
+        .semantic-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+        .semantic-table th { text-align: left; padding: 8px 12px; background: var(--bg); color: var(--text-secondary); font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
+        .semantic-table th:first-child { border-radius: 6px 0 0 0; }
+        .semantic-table th:last-child { border-radius: 0 6px 0 0; text-align: center; }
+        .semantic-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+        .semantic-table tr:last-child td { border-bottom: none; }
+        .semantic-table tr:hover { background: rgba(102,126,234,0.03); }
+        .semantic-table td:last-child { text-align: center; white-space: nowrap; }
+        .semantic-table input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; width: 100%; box-sizing: border-box; }
+        .semantic-table input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(102,126,234,0.1); }
+        .semantic-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 3px 10px; margin: 2px 4px 2px 0; font-size: 14px; color: var(--text); transition: all 0.15s; }
+        .semantic-tag:hover { border-color: var(--primary); background: rgba(102,126,234,0.05); }
+        .semantic-tag-del { cursor: pointer; color: var(--text-secondary); font-weight: bold; font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 50%; }
+        .semantic-tag-del:hover { color: #e53e3e; background: rgba(229,62,62,0.1); }
+        .semantic-tag-add { display: inline-flex; align-items: center; gap: 2px; background: transparent; border: 1px dashed var(--border); border-radius: 14px; padding: 3px 10px; margin: 2px 4px 2px 0; font-size: 14px; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+        .semantic-tag-add:hover { border-color: var(--primary); color: var(--primary); background: rgba(102,126,234,0.04); }
+        .semantic-tag-input { border: 1px solid var(--primary) !important; border-radius: 14px !important; padding: 3px 10px !important; margin: 2px 4px 2px 0 !important; font-size: 14px !important; width: 110px !important; }
+        .row-editing td { background: rgba(102,126,234,0.02); }
+        .btn-inline-edit { background: #ed8936; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 500; transition: all 0.15s; }
+        .btn-inline-edit:hover { background: #dd6b20; }
+        .btn-inline-save { background: #48bb78; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 500; transition: all 0.15s; }
+        .btn-inline-save:hover { background: #38a169; }
+        .btn-inline-cancel { background: #a0aec0; color: #fff; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 500; transition: all 0.15s; }
+        .btn-inline-cancel:hover { background: #718096; }
+        .btn-danger { background: transparent; color: #e53e3e; border: 1px solid #e53e3e; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 12px; font-family: inherit; font-weight: 500; transition: all 0.15s; }
+        .btn-danger:hover { background: #e53e3e; color: #fff; }
+        /* Pagination */
+        .page-btn { width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .page-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+        .page-btn:disabled { opacity: 0.4; cursor: default; }
+        .page-info { font-size: 12px; color: var(--text-secondary); margin: 0 8px; }
+
+        @media (max-width: 900px) {
+            .semantic-wrapper { padding: 12px; }
+        }
     </style>
 </head>
 <body>
     <!-- Header -->
     <div class="header">
         <h1>简历智能处理工具</h1>
-        <span class="subtitle">Qwen3-8B-FP8 本地模型 (vLLM)</span>
+        <span class="subtitle">Qwen3-8B-AWQ 本地模型 (vLLM)</span>
         <div class="nav-right">
             <a href="/benchmark">压测报告</a>
         </div>
@@ -369,6 +451,7 @@
     <!-- Tabs -->
     <div class="tab-nav">
         <button class="tab-btn" onclick="switchTab('score')">简历打分</button>
+        <button class="tab-btn" onclick="switchTab('semantic')">语义对照</button>
         <button class="tab-btn" onclick="switchTab('parse')">简历解析</button>
         <button class="tab-btn" onclick="switchTab('function')">职能分析</button>
         <button class="tab-btn" onclick="switchTab('chat')">AI Chat</button>
@@ -383,6 +466,11 @@
             <div class="input-section">
                 <div class="input-block">
                     <h3><span class="badge badge-resume">简历</span> 候选人简历内容</h3>
+                    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+                        <input type="text" id="resumeIdInput" placeholder="输入简历ID" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;background:var(--card-bg);color:var(--text);outline:none">
+                        <button class="btn-small" onclick="loadResumeById()" id="loadResumeBtn">📥 加载简历</button>
+                        <span id="resumeLoadStatus" style="font-size:11px;color:var(--text-secondary)"></span>
+                    </div>
                     <textarea id="resumeInput" rows="14" placeholder="在此粘贴候选人简历...&#10;支持从PDF/Word复制文本，或从测试用例中选择模板"></textarea>
                     <div class="hint">
                         <span id="resumeCharCount">0 字符</span>
@@ -391,8 +479,13 @@
                 </div>
 
                 <div class="input-block">
-                    <h3><span class="badge badge-jd">JD</span> 职位描述</h3>
-                    <textarea id="jdInput" rows="10" placeholder="在此粘贴职位描述(Job Description)...&#10;包括岗位职责、任职要求、加分项等"></textarea>
+                    <h3><span class="badge badge-jd">项目</span> 项目描述</h3>
+                    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+                        <input type="text" id="projectIdInput" placeholder="输入项目ID" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;background:var(--card-bg);color:var(--text);outline:none">
+                        <button class="btn-small" onclick="loadJdByProjectId()" id="loadJdBtn">📥 加载项目</button>
+                        <span id="jdLoadStatus" style="font-size:11px;color:var(--text-secondary)"></span>
+                    </div>
+                    <textarea id="jdInput" rows="10" placeholder="在此粘贴项目描述...&#10;包括项目背景、要求、评分标准等"></textarea>
                     <div class="hint">
                         <span id="jdCharCount">0 字符</span>
                         <span id="jdTokenEst">~0 tokens</span>
@@ -400,23 +493,30 @@
                 </div>
 
                 <div class="input-block">
-                    <h3><span class="badge badge-rules">规则</span> 打分规则</h3>
-                    <textarea id="rulesInput" rows="8" placeholder="在此定义打分规则...&#10;包括评分维度、分值权重、评分标准、输出格式要求等"></textarea>
+                    <h3>
+                        <span class="badge badge-rules">规则</span> 打分规则
+                        <span style="margin-left:auto;font-size:11px;color:var(--text-secondary)" id="rulesVersionLabel">v-</span>
+                        <button class="btn-small" onclick="loadScoringRulesFromServer()" style="margin-left:6px">🔄 加载最新规则</button>
+                    </h3>
+                    <textarea id="rulesInput" rows="8" readonly style="background:var(--bg);opacity:0.85;cursor:not-allowed" placeholder="打分规则自动加载中..."></textarea>
                     <div class="hint">
                         <span id="rulesCharCount">0 字符</span>
                         <span id="rulesTokenEst">~0 tokens</span>
+                        <span style="font-size:11px;color:var(--text-secondary)">规则从服务器自动加载，不可手动编辑</span>
                     </div>
                 </div>
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
                     <button class="btn-primary" id="scoreBtn" onclick="startScoring()">开始打分</button>
+                    <button class="btn-primary" id="multiScoreBtn" onclick="startMultiRoundScoring()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">🔬 多轮打分</button>
                     <button class="btn-secondary" onclick="loadTestCase()">加载测试用例</button>
+                    <button class="btn-secondary" onclick="downloadTestCase()">📥 下载测试用例</button>
                     <button class="btn-secondary" onclick="clearScoreInputs()">清空</button>
                 </div>
 
                 <!-- Test case selector (hidden by default) -->
                 <div id="testCaseSelector" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--card-bg)">
-                    <h3 style="font-size:13px;margin-bottom:10px">选择压测用例模板（复用压测中的简历+JD+规则）</h3>
+                    <h3 style="font-size:13px;margin-bottom:10px">选择压测用例模板（复用压测中的简历+项目+规则）</h3>
                     <div id="testCaseList" style="display:flex;flex-direction:column;gap:8px">加载中...</div>
                 </div>
             </div>
@@ -435,6 +535,67 @@
                     <pre class="result-content" id="scoreResultContent" style="display:none"></pre>
                 </div>
                 <div class="metrics-bar" id="scoreMetrics" style="display:none"></div>
+
+                <!-- Multi-round steps display -->
+                <div id="multiRoundSteps" style="display:none;margin-top:16px;flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--card-bg);padding:16px;min-height:200px">
+                    <h3 style="font-size:14px;margin-bottom:12px;color:var(--text)">🔬 多轮打分过程</h3>
+                    <div id="step1Card" class="step-card" style="display:none">
+                        <div class="step-header"><span class="step-num">1</span> 简历信息提取 <span class="step-status" id="step1Status"></span></div>
+                        <div class="step-body" id="step1Body"></div>
+                    </div>
+                    <div id="step2Card" class="step-card" style="display:none">
+                        <div class="step-header"><span class="step-num">2</span> 产品匹配判断 <span class="step-status" id="step2Status"></span></div>
+                        <div class="step-body" id="step2Body"></div>
+                    </div>
+                    <div id="step3Card" class="step-card" style="display:none">
+                        <div class="step-header"><span class="step-num">3</span> 职能匹配判断 <span class="step-status" id="step3Status"></span></div>
+                        <div class="step-body" id="step3Body"></div>
+                    </div>
+                    <div id="step4Card" class="step-card" style="display:none">
+                        <div class="step-header"><span class="step-num">4</span> 最终评分计算 <span class="step-status" id="step4Status"></span></div>
+                        <div class="step-body" id="step4Body"></div>
+                    </div>
+                    <div id="multiRoundFinal" style="display:none;margin-top:12px;padding:16px;background:linear-gradient(135deg,#6366f120,#8b5cf620);border-radius:10px;border:1px solid #6366f140">
+                        <div style="font-size:14px;font-weight:600;color:#6366f1;margin-bottom:8px">📋 最终评分结果（JSON）</div>
+                        <pre id="multiRoundFinalJSON" style="margin:0;padding:12px;background:#1e1e2e;border-radius:8px;color:#cdd6f4;font-size:13px;overflow-x:auto;white-space:pre-wrap"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Semantic Mappings Panel -->
+        <div id="semanticPanel" style="display:none;flex:1;overflow-y:auto;flex-direction:column">
+            <div class="semantic-wrapper">
+                <div class="semantic-header">
+                    <div>
+                        <h2 style="margin:0;font-size:18px">语义对照关系</h2>
+                        <span id="semanticStatus" style="font-size:12px;color:var(--text-secondary)">加载中...</span>
+                    </div>
+                    <button class="btn-small" onclick="loadSemanticMappings()">🔄 重新加载</button>
+                </div>
+
+                <!-- Sub-tabs -->
+                <div class="semantic-subtabs">
+                    <button class="semantic-subtab active" onclick="switchSemanticTab('product')">📦 产品</button>
+                    <button class="semantic-subtab" onclick="switchSemanticTab('function')">🔧 职能</button>
+                    <button class="semantic-subtab" onclick="switchSemanticTab('level')">📊 职级</button>
+                </div>
+
+                <!-- Table -->
+                <div class="semantic-section">
+                    <div class="semantic-section-header">
+                        <h3 id="semanticSectionTitle">📦 产品 (Product)</h3>
+                        <span style="font-size:12px;color:var(--text-secondary)" id="semanticCount">0 条</span>
+                    </div>
+                    <table class="semantic-table">
+                        <thead><tr><th style="width:25%" id="semanticTh1">JD产品名</th><th id="semanticTh2">对照值（别名/同义词）</th><th style="width:100px">操作</th></tr></thead>
+                        <tbody id="semanticBody"></tbody>
+                    </table>
+                    <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+                        <button class="btn-small" id="semanticAddBtn" onclick="addMapping(currentSemanticTab)">+ 新增</button>
+                        <div id="semanticPagination" style="display:flex;align-items:center;gap:4px"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -577,7 +738,7 @@
                                     <div class="setting-desc">vLLM 加载的模型路径</div>
                                 </div>
                             </div>
-                            <input type="text" id="settingModel" class="setting-input" value="/root/vLLM/models/Qwen3-8B-FP8" readonly>
+                            <input type="text" id="settingModel" class="setting-input" value="/root/vLLM/models/Qwen3-8B-AWQ" readonly>
                         </div>
 
                         <!-- Temperature -->
@@ -639,7 +800,7 @@
     <!-- Config Bar -->
     <div class="config-bar" style="display:none">
         <label>模型</label>
-        <input type="text" id="modelName" value="/root/vLLM/models/Qwen3-8B-FP8" style="width:320px">
+        <input type="text" id="modelName" value="/root/vLLM/models/Qwen3-8B-AWQ" style="width:320px">
         <label>Temperature</label>
         <input type="number" id="temperature" value="0.1" step="0.1" min="0" max="1">
         <label>最大输出</label>
@@ -706,34 +867,45 @@
             html += '<span style="white-space:pre-wrap">' + escapeHtml(state.answer) + '</span>';
         }
         container.innerHTML = html;
+        // 自动滚动思考内容到底部
+        var thinkEl = container.querySelector('.think-content');
+        if (thinkEl) thinkEl.scrollTop = thinkEl.scrollHeight;
         return state;
     }
 
     // ========== Tab Switching ==========
+    var semanticLoaded = false;
     window.switchTab = function(tab) {
         document.querySelectorAll('.tab-btn').forEach(function(b, i) {
             b.classList.toggle('active',
                 (i === 0 && tab === 'score') ||
-                (i === 1 && tab === 'parse') ||
-                (i === 2 && tab === 'function') ||
-                (i === 3 && tab === 'chat') ||
-                (i === 4 && tab === 'settings')
+                (i === 1 && tab === 'semantic') ||
+                (i === 2 && tab === 'parse') ||
+                (i === 3 && tab === 'function') ||
+                (i === 4 && tab === 'chat') ||
+                (i === 5 && tab === 'settings')
             );
         });
         document.getElementById('scoringPanel').style.display = tab === 'score' ? 'flex' : 'none';
+        document.getElementById('semanticPanel').style.display = tab === 'semantic' ? 'flex' : 'none';
         document.getElementById('parsePanel').style.display = tab === 'parse' ? 'flex' : 'none';
         document.getElementById('functionPanel').style.display = tab === 'function' ? 'flex' : 'none';
         document.getElementById('chatPanel').style.display = tab === 'chat' ? 'flex' : 'none';
         document.getElementById('settingsPanel').style.display = tab === 'settings' ? 'flex' : 'none';
         // 隐藏/显示底部配置栏
         document.querySelector('.config-bar').style.display = (tab === 'settings' || tab === 'function') ? 'none' : 'flex';
+        // 延迟加载语义对照
+        if (tab === 'semantic' && !semanticLoaded) {
+            semanticLoaded = true;
+            loadSemanticMappings();
+        }
     };
 
     // ========== Settings Persistence (localStorage) ==========
     var SETTINGS_KEY = 'vllm_settings';
     var DEFAULT_SETTINGS = {
         thinking: false,
-        model: '/root/vLLM/models/Qwen3-8B-FP8',
+        model: '/root/vLLM/models/Qwen3-8B-AWQ',
         temperature: 0.1,
         maxTokens: 600
     };
@@ -741,6 +913,11 @@
     function loadSettings() {
         try {
             var saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            // 迁移旧模型名
+            if (saved && saved.model && saved.model.indexOf('Qwen3-8B-FP8') !== -1) {
+                saved.model = '/root/vLLM/models/Qwen3-8B-AWQ';
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(saved));
+            }
             return Object.assign({}, DEFAULT_SETTINGS, saved || {});
         } catch(e) {
             return DEFAULT_SETTINGS;
@@ -795,7 +972,7 @@
         var s = {
             thinking: document.getElementById('settingThinking').checked,
             model: document.getElementById('settingModel').value,
-            temperature: parseFloat(document.getElementById('settingTemp').value) || 0.1,
+            temperature: (function() { var v = parseFloat(document.getElementById('settingTemp').value); return isNaN(v) ? 0.1 : v; })(),
             maxTokens: parseInt(document.getElementById('settingMaxTokens').value) || 600
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
@@ -864,7 +1041,7 @@
         var s = {
             thinking: document.getElementById('thinkingToggle').checked,
             model: document.getElementById('modelName').value,
-            temperature: parseFloat(document.getElementById('temperature').value) || 0.1,
+            temperature: (function() { var v = parseFloat(document.getElementById('temperature').value); return isNaN(v) ? 0.1 : v; })(),
             maxTokens: parseInt(document.getElementById('maxTokens').value) || 600
         };
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
@@ -914,13 +1091,18 @@
         var rules = rulesInput.value.trim();
 
         if (!resume) { alert('请输入简历内容'); return; }
-        if (!jd) { alert('请输入职位描述'); return; }
-        if (!rules) { alert('请输入打分规则'); return; }
+        if (!jd) { alert('请输入项目描述'); return; }
+        if (!rules) { alert('打分规则未加载，请点击「🔄 加载最新规则」'); return; }
 
         isScoring = true;
         var btn = document.getElementById('scoreBtn');
         btn.disabled = true;
         btn.textContent = '打分中...';
+
+        // Hide multi-round, show single-round result container
+        document.getElementById('multiRoundSteps').style.display = 'none';
+        document.getElementById('scoreResultContainer').style.display = '';
+        document.getElementById('scoreMetrics').style.display = 'flex';
 
         var model = document.getElementById('modelName').value;
         var temperature = parseFloat(document.getElementById('temperature').value);
@@ -929,7 +1111,7 @@
         // Build prompt
         var prompt = '你是一位资深HR和技术面试官，拥有15年互联网行业人才评估经验。请严格按照打分规则对候选人进行客观、公正的评估。\n\n';
         prompt += '=== 候选人简历 ===\n' + resume + '\n\n';
-        prompt += '=== 职位描述(JD) ===\n' + jd + '\n\n';
+        prompt += '=== 项目描述 ===\n' + jd + '\n\n';
         prompt += '=== 打分规则 ===\n' + rules;
 
         // Show in result
@@ -991,6 +1173,26 @@
             scoreResult = outputText;
             document.getElementById('outputTokenCount').textContent = outputTokenEst.toLocaleString();
 
+            // 自动计算总分（模型输出可能不含 finalScore）
+            try {
+                var jsonMatch = outputText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    var parsed = JSON.parse(jsonMatch[0]);
+                    if (parsed.productScore != null && parsed.finalScore == null) {
+                        var total = (parsed.productScore || 0) + (parsed.functionScore || 0)
+                            + (parsed.continuityScore || 0) + (parsed.educationScore || 0)
+                            - (parsed.mustDeduction || 0)
+                            + (parsed.bonusTargetCompany || 0) + (parsed.bonusPrefer || 0)
+                            + (parsed.bonusStability || 0) + (parsed.bonusLocation || 0);
+                        total = Math.max(0, Math.min(100, total));
+                        parsed.finalScore = total;
+                        var formatted = JSON.stringify(parsed, null, 2);
+                        content.textContent = formatted;
+                        scoreResult = formatted;
+                    }
+                }
+            } catch(e) { /* 解析失败则保留原始输出 */ }
+
             document.getElementById('scoreMetrics').innerHTML =
                 '<div class="metric-item">总耗时: ' + totalTime + 's</div>' +
                 '<div class="metric-item">TTFT: ' + ttft + 's</div>' +
@@ -1044,7 +1246,7 @@
         });
 
         html += '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary)">';
-        html += '点击上方简历卡片会自动填入：简历内容 + JD(' + (testCasesData.jd_char_count || 0).toLocaleString() + ' chars) + 打分规则(' + (testCasesData.rules_char_count || 0).toLocaleString() + ' chars)';
+        html += '点击上方简历卡片会自动填入：简历内容 + 项目(' + (testCasesData.jd_char_count || 0).toLocaleString() + ' chars) + 打分规则(' + (testCasesData.rules_char_count || 0).toLocaleString() + ' chars)';
         html += '</div>';
 
         document.getElementById('testCaseList').innerHTML = html;
@@ -1055,7 +1257,7 @@
         var r = testCasesData.resumes[idx];
         resumeInput.value = r.content;
         jdInput.value = testCasesData.jd || '';
-        rulesInput.value = testCasesData.rules || '';
+        // 规则不再从测试用例加载，始终使用服务器最新版本
         updateCharCount();
         document.getElementById('testCaseSelector').style.display = 'none';
     };
@@ -1063,13 +1265,250 @@
     function clearScoreInputs() {
         resumeInput.value = '';
         jdInput.value = '';
-        rulesInput.value = '';
+        // 规则不清空，始终保持服务器最新版本
         updateCharCount();
         document.getElementById('scoreResultContent').style.display = 'none';
         document.getElementById('scoreEmpty').style.display = '';
         document.getElementById('scoreMetrics').style.display = 'none';
         document.getElementById('outputTokenCount').textContent = '0';
+        document.getElementById('multiRoundSteps').style.display = 'none';
         scoreResult = '';
+    }
+
+    // ========== 多轮打分 ==========
+    async function startMultiRoundScoring() {
+        var resume = resumeInput.value.trim();
+        var jd = jdInput.value.trim();
+        var rules = rulesInput.value.trim();
+        if (!resume || !jd) { alert('请先填写简历和项目描述'); return; }
+
+        var btn = document.getElementById('multiScoreBtn');
+        btn.disabled = true;
+        btn.textContent = '🔬 打分中...';
+
+        // Hide single-round result and metrics, let multi-round take full right side
+        document.getElementById('scoreResultContainer').style.display = 'none';
+        document.getElementById('scoreMetrics').style.display = 'none';
+
+        // Show steps container, fill the right panel
+        var stepsDiv = document.getElementById('multiRoundSteps');
+        stepsDiv.style.display = 'block';
+        stepsDiv.style.flex = '1';
+        stepsDiv.style.overflow = 'auto';
+        document.getElementById('multiRoundFinal').style.display = 'none';
+        for (var i = 1; i <= 4; i++) {
+            document.getElementById('step' + i + 'Card').style.display = 'none';
+            document.getElementById('step' + i + 'Body').innerHTML = '';
+            document.getElementById('step' + i + 'Body').className = 'step-body';
+            document.getElementById('step' + i + 'Status').textContent = '';
+            document.getElementById('step' + i + 'Status').className = 'step-status';
+        }
+
+        // Get target companies from JD
+        var targetMatch = jd.match(/目标公司[：:】]\s*([\s\S]*?)$/m) || jd.match(/【目标公司】\s*\n([\s\S]*?)$/m);
+        var targetCompanies = targetMatch ? targetMatch[1].trim() : '';
+
+        try {
+            var resp = await fetch('/api/score-layered', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jdText: jd,
+                    resumeText: resume,
+                    rules: rules,
+                    targetCompanies: targetCompanies,
+                    temperature: 0,
+                    max_tokens: 2000,
+                })
+            });
+
+            var reader = resp.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var currentEvent = '';
+
+            while (true) {
+                var result = await reader.read();
+                if (result.done) break;
+                buffer += decoder.decode(result.value, { stream: true });
+
+                // Process complete lines
+                var newlineIdx;
+                while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+                    var line = buffer.substring(0, newlineIdx).trim();
+                    buffer = buffer.substring(newlineIdx + 1);
+
+                    if (line.startsWith('event: ')) {
+                        currentEvent = line.slice(7);
+                    } else if (line.startsWith('data: ') && currentEvent) {
+                        try {
+                            var data = JSON.parse(line.slice(6));
+                            handleMultiRoundEvent(currentEvent, data);
+                        } catch(e) { console.log('JSON parse error:', e, line.slice(6).substring(0, 100)); }
+                        currentEvent = '';
+                    } else if (line === '') {
+                        currentEvent = '';
+                    }
+                }
+            }
+        } catch (e) {
+            alert('多轮打分失败: ' + e.message);
+        }
+
+        btn.disabled = false;
+        btn.textContent = '🔬 多轮打分';
+    }
+
+    function handleMultiRoundEvent(type, data) {
+        if (type === 'step') {
+            var card = document.getElementById('step' + data.step + 'Card');
+            var statusEl = document.getElementById('step' + data.step + 'Status');
+            var bodyEl = document.getElementById('step' + data.step + 'Body');
+
+            card.style.display = 'block';
+
+            if (data.status === 'running') {
+                statusEl.textContent = '⏳ 分析中...';
+                statusEl.className = 'step-status running';
+                bodyEl.className = 'step-body show';
+                bodyEl.innerHTML = '<div style="color:#f59e0b">正在分析...</div>';
+            } else if (data.status === 'done') {
+                statusEl.textContent = '✅ 完成';
+                statusEl.className = 'step-status done';
+                bodyEl.className = 'step-body show';
+                bodyEl.innerHTML = formatStepResult(data.step, data.result);
+            }
+        } else if (type === 'done') {
+            var finalDiv = document.getElementById('multiRoundFinal');
+            finalDiv.style.display = 'block';
+            var fs = data.finalScore;
+            if (fs && fs.finalScore !== undefined) {
+                document.getElementById('multiRoundFinalJSON').textContent = JSON.stringify(fs, null, 2);
+            }
+        } else if (type === 'error') {
+            alert('多轮打分出错: ' + (data.message || '未知错误'));
+        }
+    }
+
+    function formatStepResult(step, result) {
+        if (!result) return '<div style="color:#ef4444">解析失败</div>';
+        var html = '<div class="step-json"><table>';
+        var labels = {
+            1: { industry: '行业', mainProduct: '主线产品', mainProductDetail: '产品工作内容', mainFunction: '主线职能', mainFunctionDetail: '职能内容', totalYears: '工作年限', age: '年龄', latestCompany: '最近公司', latestPosition: '最近职位', education: '学历', school: '学校', jobCount: '近5年段数', avgTenure: '平均时长', hasGap: '职业断档', spcMention: 'SPC/CPK', workLocation: '工作地点', willingToRelocate: '愿迁移' },
+            2: { productScore: '产品得分', matchLevel: '匹配级别', reasoning: '判断依据', multiProductDeduct: '多产品扣分', continuityDeduct: '连续性扣分' },
+            3: { functionScore: '职能得分', matchLevel: '匹配级别', reasoning: '判断依据' },
+            4: { finalScore: '最终得分', baseScore: '基础分', bonusScore: '加分', deductScore: '扣分', gatePath: '评分路径', overallRecommendation: '推荐等级', mustHaveDesc: '说明' }
+        };
+        var lbl = labels[step] || {};
+        for (var key in result) {
+            if (result.hasOwnProperty(key)) {
+                var val = result[key];
+                if (typeof val === 'boolean') val = val ? '是' : '否';
+                if (typeof val === 'object') val = JSON.stringify(val);
+                html += '<tr><td>' + (lbl[key] || key) + '</td><td>' + val + '</td></tr>';
+            }
+        }
+        html += '</table></div>';
+        return html;
+    }
+
+    // ========== 下载当前测试用例 ==========
+    function downloadTestCase() {
+        var resume = resumeInput.value.trim();
+        var jd = jdInput.value.trim();
+        var rules = rulesInput.value.trim();
+
+        if (!resume && !jd && !rules) {
+            alert('当前没有可下载的内容，请先加载或填写简历、项目描述和打分规则');
+            return;
+        }
+
+        var testCase = {
+            resume: resume,
+            jd: jd,
+            rules: rules,
+            exportedAt: new Date().toISOString(),
+            resumeChars: resume.length,
+            jdChars: jd.length,
+            rulesChars: rules.length,
+        };
+
+        var blob = new Blob([JSON.stringify(testCase, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        var now = new Date();
+        var ts = now.getFullYear() + ''
+            + String(now.getMonth() + 1).padStart(2, '0')
+            + String(now.getDate()).padStart(2, '0')
+            + '_'
+            + String(now.getHours()).padStart(2, '0')
+            + String(now.getMinutes()).padStart(2, '0');
+        a.href = url;
+        a.download = 'test_case_' + ts + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // ========== 从数据库加载项目描述（按项目ID） ==========
+    async function loadJdByProjectId() {
+        var projectId = document.getElementById('projectIdInput').value.trim();
+        if (!projectId) { alert('请输入项目ID'); return; }
+
+        var btn = document.getElementById('loadJdBtn');
+        var statusEl = document.getElementById('jdLoadStatus');
+        btn.disabled = true;
+        btn.textContent = '加载中...';
+        statusEl.textContent = '';
+        statusEl.style.color = 'var(--text-secondary)';
+
+        try {
+            var resp = await fetch('/api/db/project-jd?projectId=' + encodeURIComponent(projectId));
+            var data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+
+            jdInput.value = data.fullJd || '';
+            updateCharCount();
+            statusEl.textContent = '✅ 已加载 (ID: ' + projectId + ')';
+            statusEl.style.color = '#48bb78';
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#e53e3e';
+        }
+
+        btn.disabled = false;
+        btn.textContent = '📥 加载项目';
+    }
+
+    // ========== 从数据库加载简历（按简历ID） ==========
+    async function loadResumeById() {
+        var resumeId = document.getElementById('resumeIdInput').value.trim();
+        if (!resumeId) { alert('请输入简历ID'); return; }
+
+        var btn = document.getElementById('loadResumeBtn');
+        var statusEl = document.getElementById('resumeLoadStatus');
+        btn.disabled = true;
+        btn.textContent = '加载中...';
+        statusEl.textContent = '';
+        statusEl.style.color = 'var(--text-secondary)';
+
+        try {
+            var resp = await fetch('/api/db/resume?resumeId=' + encodeURIComponent(resumeId));
+            var data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+
+            resumeInput.value = data.content || '';
+            updateCharCount();
+            statusEl.textContent = '✅ 已加载';
+            statusEl.style.color = '#48bb78';
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#e53e3e';
+        }
+
+        btn.disabled = false;
+        btn.textContent = '📥 加载简历';
     }
 
     function formatScoreResult() {
@@ -1175,9 +1614,32 @@
             var tc = await resp.json();
             if (tc.resume) resumeInput.value = tc.resume;
             if (tc.jd) jdInput.value = tc.jd;
-            if (tc.rules) rulesInput.value = tc.rules;
+            // 规则不再从默认测试用例加载，始终使用服务器最新版本
             updateCharCount();
         } catch(e) {}
+    }
+
+    // ========== 从服务器加载最新打分规则 ==========
+    async function loadScoringRulesFromServer() {
+        var statusEl = document.getElementById('rulesVersionLabel');
+        statusEl.textContent = '加载中...';
+        statusEl.style.color = 'var(--text-secondary)';
+        try {
+            var resp = await fetch('/api/scoring-rules');
+            var data = await resp.json();
+            if (data.rules) {
+                rulesInput.value = data.rules;
+                updateCharCount();
+                statusEl.textContent = 'v' + (data.version || '?') + ' | ' + (data.rules_length || rulesInput.value.length) + '字符';
+                statusEl.style.color = '#48bb78';
+            } else {
+                statusEl.textContent = '❌ 加载失败';
+                statusEl.style.color = '#e53e3e';
+            }
+        } catch(e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#e53e3e';
+        }
     }
 
     // ========== Function Analysis ==========
@@ -1295,6 +1757,20 @@
     }
 
     loadDefaultTestCase();
+    loadScoringRulesFromServer();
+
+    // URL定位tab: /#semantic 或 ?tab=semantic
+    (function() {
+        var hash = window.location.hash.replace('#', '');
+        var query = window.location.search;
+        var tab = '';
+        if (hash && /^(score|semantic|parse|function|chat|settings)$/.test(hash)) tab = hash;
+        if (!tab && query) {
+            var m = query.match(/[?&]tab=(score|semantic|parse|function|chat|settings)/);
+            if (m) tab = m[1];
+        }
+        if (tab) switchTab(tab);
+    })();
 
     // ========== Resume Parsing ==========
     var parseResumeInput = document.getElementById('parseResumeInput');
@@ -1505,6 +1981,252 @@
 
     // 页面加载时自动加载默认解析规则
     loadParseRulesFromServer();
+
+    // ========== Semantic Mappings CRUD ==========
+    var semanticData = { product: [], 'function': [], level: [] };
+    var currentSemanticTab = 'product';
+    var semanticPage = { product: 1, 'function': 1, level: 1 };
+    var PAGE_SIZE = 10;
+    var CATEGORY_CONFIG = {
+        product: { label: '产品', icon: '📦', th1: 'JD产品名', th2: '对照值（别名/同义词）' },
+        'function': { label: '职能', icon: '🔧', th1: '职能名', th2: '对照值（相邻职能）' },
+        level: { label: '职级', icon: '📊', th1: '职位名', th2: '对照值（等级）' }
+    };
+
+    function loadSemanticMappings() {
+        var statusEl = document.getElementById('semanticStatus');
+        statusEl.textContent = '加载中...';
+        fetch('/api/semantic-mappings').then(function(r) { return r.json(); }).then(function(data) {
+            semanticData.product = []; semanticData['function'] = []; semanticData.level = [];
+            (data.data || []).forEach(function(item) {
+                semanticData[item.category].push(item);
+            });
+            var total = semanticData.product.length + semanticData['function'].length + semanticData.level.length;
+            statusEl.textContent = '已加载 ' + total + ' 条对照关系';
+            renderCurrentTable();
+        }).catch(function(e) {
+            statusEl.textContent = '加载失败: ' + e.message;
+        });
+    }
+
+    function switchSemanticTab(cat) {
+        currentSemanticTab = cat;
+        document.querySelectorAll('.semantic-subtab').forEach(function(b, i) {
+            var tabs = ['product', 'function', 'level'];
+            b.classList.toggle('active', tabs[i] === cat);
+        });
+        var cfg = CATEGORY_CONFIG[cat];
+        document.getElementById('semanticSectionTitle').textContent = cfg.icon + ' ' + cfg.label + ' (' + cfg.label + ')';
+        document.getElementById('semanticTh1').textContent = cfg.th1;
+        document.getElementById('semanticTh2').textContent = cfg.th2;
+        document.getElementById('semanticAddBtn').textContent = '+ 新增' + cfg.label;
+        renderCurrentTable();
+    }
+
+    function getPageData(cat) {
+        var data = semanticData[cat] || [];
+        var page = semanticPage[cat] || 1;
+        var start = (page - 1) * PAGE_SIZE;
+        return { items: data.slice(start, start + PAGE_SIZE), total: data.length, page: page, totalPages: Math.ceil(data.length / PAGE_SIZE) || 1 };
+    }
+
+    function renderCurrentTable() {
+        renderTableAndPagination(currentSemanticTab);
+    }
+
+    function renderTableAndPagination(cat) {
+        var pd = getPageData(cat);
+        var cfg = CATEGORY_CONFIG[cat];
+        document.getElementById('semanticCount').textContent = pd.total + ' 条';
+
+        // Table body
+        var html = '';
+        pd.items.forEach(function(item, pi) {
+            var globalIdx = semanticData[cat].indexOf(item);
+            var rowKey = cat + '-' + globalIdx;
+            var editing = window['_semEdit_' + rowKey];
+            if (editing) {
+                html += '<tr class="row-editing" id="row-' + rowKey + '">';
+                html += '<td><input type="text" id="editKey-' + rowKey + '" value="' + escapeHtml(editing.key_name) + '" placeholder="主名称"></td>';
+                html += '<td style="padding:4px 8px">';
+                editing.values.forEach(function(v, vi) {
+                    html += '<input class="semantic-tag-input" id="editVal-' + rowKey + '-' + vi + '" value="' + escapeHtml(v) + '">';
+                });
+                html += '<span class="semantic-tag-add" onclick="addEditValue(\'' + cat + '\',' + globalIdx + ')">+</span>';
+                html += '</td>';
+                html += '<td><button class="btn-inline-save" onclick="saveRow(\'' + cat + '\',' + globalIdx + ')">保存</button> <button class="btn-inline-cancel" onclick="cancelEdit(\'' + cat + '\',' + globalIdx + ')">取消</button></td>';
+                html += '</tr>';
+            } else {
+                html += '<tr>';
+                html += '<td><strong>' + escapeHtml(item.key_name) + '</strong></td>';
+                html += '<td>';
+                (item.values || []).forEach(function(v, vi) {
+                    html += '<span class="semantic-tag">' + escapeHtml(v) + '<span class="semantic-tag-del" onclick="removeValue(\'' + cat + '\',' + globalIdx + ',' + vi + ')">&times;</span></span>';
+                });
+                html += '<span class="semantic-tag-add" onclick="addValue(\'' + cat + '\',' + globalIdx + ')">+</span>';
+                html += '</td>';
+                html += '<td><button class="btn-inline-edit" onclick="editRow(\'' + cat + '\',' + globalIdx + ')">编辑</button> <button class="btn-danger" onclick="deleteRow(\'' + cat + '\',' + globalIdx + ')">删除</button></td>';
+                html += '</tr>';
+            }
+        });
+        if (pd.total === 0) {
+            html += '<tr><td colspan="3" style="text-align:center;color:var(--text-secondary);padding:20px">暂无' + cfg.label + '对照数据</td></tr>';
+        }
+        document.getElementById('semanticBody').innerHTML = html;
+
+        // Pagination
+        var pagHtml = '';
+        pagHtml += '<button class="page-btn" onclick="goPage(\'' + cat + '\',' + (pd.page - 1) + ')"' + (pd.page <= 1 ? ' disabled' : '') + '>◀</button>';
+        pagHtml += '<span class="page-info">' + pd.page + ' / ' + pd.totalPages + '</span>';
+        pagHtml += '<button class="page-btn" onclick="goPage(\'' + cat + '\',' + (pd.page + 1) + ')"' + (pd.page >= pd.totalPages ? ' disabled' : '') + '>▶</button>';
+        document.getElementById('semanticPagination').innerHTML = pagHtml;
+    }
+
+    function goPage(cat, page) {
+        var pd = getPageData(cat);
+        if (page < 1 || page > pd.totalPages) return;
+        semanticPage[cat] = page;
+        if (cat === currentSemanticTab) renderTableAndPagination(cat);
+    }
+
+    function editRow(cat, idx) {
+        var item = semanticData[cat][idx];
+        var rowKey = cat + '-' + idx;
+        window['_semEdit_' + rowKey] = { key_name: item.key_name, values: (item.values || []).slice() };
+        renderCurrentTable();
+        setTimeout(function() {
+            var el = document.getElementById('editKey-' + rowKey);
+            if (el) el.focus();
+        }, 50);
+    }
+
+    function cancelEdit(cat, idx) {
+        var rowKey = cat + '-' + idx;
+        var editing = window['_semEdit_' + rowKey];
+        if (editing && !editing.key_name) {
+            semanticData[cat].splice(idx, 1);
+        }
+        delete window['_semEdit_' + rowKey];
+        renderCurrentTable();
+    }
+
+    function syncEditRow(cat, idx) {
+        var rowKey = cat + '-' + idx;
+        var editing = window['_semEdit_' + rowKey];
+        if (!editing) return;
+        // Sync key_name
+        var keyEl = document.getElementById('editKey-' + rowKey);
+        if (keyEl) editing.key_name = keyEl.value;
+        // Sync all value inputs
+        var synced = [];
+        var vi = 0;
+        while (true) {
+            var vEl = document.getElementById('editVal-' + rowKey + '-' + vi);
+            if (!vEl) break;
+            synced.push(vEl.value);
+            vi++;
+        }
+        editing.values = synced;
+    }
+
+    function addEditValue(cat, idx) {
+        var rowKey = cat + '-' + idx;
+        var editing = window['_semEdit_' + rowKey];
+        if (!editing) return;
+        syncEditRow(cat, idx);
+        editing.values.push('');
+        renderCurrentTable();
+    }
+
+    function addValue(cat, idx) {
+        var item = semanticData[cat][idx];
+        var rowKey = cat + '-' + idx;
+        if (!window['_semEdit_' + rowKey]) {
+            window['_semEdit_' + rowKey] = { key_name: item.key_name, values: (item.values || []).slice() };
+        } else {
+            syncEditRow(cat, idx);
+        }
+        window['_semEdit_' + rowKey].values.push('');
+        renderCurrentTable();
+    }
+
+    function removeValue(cat, idx, vi) {
+        var item = semanticData[cat][idx];
+        var newValues = (item.values || []).slice();
+        newValues.splice(vi, 1);
+        saveMapping(cat, item.key_name, newValues);
+    }
+
+    function saveRow(cat, idx) {
+        var rowKey = cat + '-' + idx;
+        var editing = window['_semEdit_' + rowKey];
+        if (!editing) return;
+        var keyEl = document.getElementById('editKey-' + rowKey);
+        var newKeyName = keyEl ? keyEl.value.trim() : editing.key_name;
+        if (!newKeyName) { alert('主名称不能为空'); return; }
+        var newValues = [];
+        var vi = 0;
+        while (true) {
+            var vEl = document.getElementById('editVal-' + rowKey + '-' + vi);
+            if (!vEl) break;
+            var v = vEl.value.trim();
+            if (v) newValues.push(v);
+            vi++;
+        }
+        if (newValues.length === 0) { alert('至少需要一个对照值'); return; }
+
+        if (newKeyName !== editing.key_name && editing.key_name) {
+            // Rename: delete old then save new
+            deleteMapping(cat, editing.key_name, function() {
+                saveMapping(cat, newKeyName, newValues);
+            });
+        } else {
+            saveMapping(cat, newKeyName, newValues);
+        }
+        delete window['_semEdit_' + rowKey];
+    }
+
+    function saveMapping(cat, keyName, values) {
+        fetch('/api/semantic-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat, key_name: keyName, values: values })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.error) { alert(data.error); return; }
+            loadSemanticMappings();
+        }).catch(function(e) { alert('保存失败: ' + e.message); });
+    }
+
+    function deleteMapping(cat, keyName, cb) {
+        fetch('/api/semantic-mappings?category=' + cat + '&key_name=' + encodeURIComponent(keyName), { method: 'DELETE' })
+            .then(function(r) { return r.json(); }).then(function(data) {
+                if (data.error) { alert(data.error); return; }
+                if (cb) cb();
+            }).catch(function(e) { alert('删除失败: ' + e.message); });
+    }
+
+    function deleteRow(cat, idx) {
+        var item = semanticData[cat][idx];
+        if (!confirm('确认删除"' + item.key_name + '"及其所有对照值？')) return;
+        deleteMapping(cat, item.key_name, function() { loadSemanticMappings(); });
+    }
+
+    function addMapping(cat) {
+        var newItem = { key_name: '', values: [''] };
+        semanticData[cat].push(newItem);
+        var totalPages = Math.ceil(semanticData[cat].length / PAGE_SIZE) || 1;
+        semanticPage[cat] = totalPages;
+        var idx = semanticData[cat].length - 1;
+        var rowKey = cat + '-' + idx;
+        window['_semEdit_' + rowKey] = { key_name: '', values: [''] };
+        renderCurrentTable();
+        setTimeout(function() {
+            var row = document.getElementById('row-' + rowKey);
+            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            var el = document.getElementById('editKey-' + rowKey);
+            if (el) el.focus();
+        }, 100);
+    }
     </script>
 </body>
 </html>
